@@ -55,7 +55,21 @@ const MAP_DATA = {
         }
     },
     "regions": [],
-    "pois": [],
+    "pois": [
+        {
+            "id": "m1",
+            "name": "Nuevo punto",
+            "type": "city",
+            "color": "#e94560",
+            "region": "",
+            "coords": [
+                3489.022788154563,
+                4500
+            ],
+            "description": "",
+            "links": []
+        }
+    ],
     "editPassword": "1",
     "github": {
         "owner": "CarlosBarbaHerrador",
