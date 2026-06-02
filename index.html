@@ -22,7 +22,10 @@
     <div id="edit-bar" style="display:none">
         <span>✏️ <strong>Modo edición</strong></span>
         <button id="btn-add" class="btn btn-primary btn-sm">➕ Nueva ubicación</button>
-        <span class="edit-hint">arrastra marcadores para moverlos</span>
+        <button id="btn-sync" class="btn btn-secondary btn-sm" style="display:none">☁️ Sincronizar</button>
+        <span id="sync-status" style="display:none;font-size:0.75rem;color:#7a9aba"></span>
+        <button id="btn-password" class="btn btn-secondary btn-sm" style="display:none">🔑 Contraseña</button>
+        <span class="edit-hint">arrastra para mover</span>
     </div>
 
     <div id="map"></div>

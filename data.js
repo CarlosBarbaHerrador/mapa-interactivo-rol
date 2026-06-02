@@ -19,5 +19,14 @@ const MAP_DATA = {
 
     regions: [],
 
-    pois: []
+    pois: [],
+
+    editPassword: "1",
+
+    github: {
+        owner: "CarlosBarbaHerrador",
+        repo: "mapa-interactivo-rol",
+        path: "data.js",
+        branch: "main"
+    }
 };

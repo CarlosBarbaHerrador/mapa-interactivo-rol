@@ -25,6 +25,83 @@
 
     // ─── PERSISTENCIA ───
     const STORAGE_KEY = 'mapa_rol_data';
+    const TOKEN_KEY = 'mapa_rol_github_token';
+
+    function getGitHubToken() {
+        return localStorage.getItem(TOKEN_KEY) || '';
+    }
+
+    function setGitHubToken(token) {
+        if (token) localStorage.setItem(TOKEN_KEY, token);
+        else localStorage.removeItem(TOKEN_KEY);
+    }
+
+    function generateDataJs() {
+        const pois = Object.values(markers).map(e => ({
+            id: e.poi.id, name: e.poi.name, type: e.poi.type,
+            color: e.poi.color, region: e.poi.region,
+            coords: e.poi.coords, description: e.poi.description,
+            links: e.poi.links
+        }));
+        const output = { ...data, pois };
+        return 'const MAP_DATA = ' + JSON.stringify(output, null, 4) + ';\n';
+    }
+
+    async function syncToGitHub() {
+        const token = getGitHubToken();
+        if (!token) return;
+        const status = document.getElementById('sync-status');
+        status.style.display = 'inline';
+        status.textContent = '☁️ subiendo...';
+
+        try {
+            const gh = data.github;
+            const content = generateDataJs();
+            const encoded = btoa(unescape(encodeURIComponent(content)));
+
+            // Obtener SHA actual del archivo
+            const getUrl = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}?ref=${gh.branch}`;
+            let sha = '';
+            try {
+                const getRes = await fetch(getUrl, {
+                    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
+                });
+                if (getRes.ok) {
+                    const getData = await getRes.json();
+                    sha = getData.sha;
+                }
+            } catch (e) {}
+
+            // Subir archivo
+            const putUrl = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}`;
+            const putRes = await fetch(putUrl, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `token ${token}`,
+                    Accept: 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: 'Actualizar mapa desde editor',
+                    content: encoded,
+                    sha: sha || undefined,
+                    branch: gh.branch
+                })
+            });
+
+            if (putRes.ok) {
+                status.textContent = '☁️ guardado en GitHub ✅';
+                setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 3000);
+            } else {
+                const err = await putRes.json();
+                status.textContent = '☁️ error: ' + (err.message || 'desconocido');
+                setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 5000);
+            }
+        } catch (e) {
+            status.textContent = '☁️ error de conexión';
+            setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 5000);
+        }
+    }
 
     function saveState() {
         try {
@@ -34,7 +111,7 @@
                 coords: e.poi.coords, description: e.poi.description,
                 links: e.poi.links
             }));
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ pois }));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ pois, editPassword: data.editPassword }));
         } catch (e) {}
     }
 
@@ -44,6 +121,7 @@
             if (!raw) return;
             const saved = JSON.parse(raw);
             if (saved.pois) saved.pois.forEach(p => addMarkerFromData(p));
+            if (saved.editPassword) data.editPassword = saved.editPassword;
         } catch (e) {}
     }
 
@@ -146,6 +224,7 @@
         layerGroup.addLayer(marker);
         updateCounter();
         saveState();
+        syncToGitHub();
         openEditModal(id);
     }
 
@@ -218,6 +297,7 @@
         closeModal();
         updateCounter();
         saveState();
+        syncToGitHub();
     }
 
     // ─── ELIMINAR ───
@@ -232,6 +312,7 @@
         closeModal();
         updateCounter();
         saveState();
+        syncToGitHub();
     }
 
     // ─── CERRAR MODAL ───
@@ -271,6 +352,14 @@
 
     // ─── TOGGLE EDIT MODE ───
     function toggleEditMode() {
+        if (!editMode) {
+            const password = prompt('Introduce la contraseña de edición:');
+            if (password !== data.editPassword) {
+                alert('Contraseña incorrecta');
+                return;
+            }
+        }
+
         editMode = !editMode;
         const btn = document.getElementById('btn-edit');
         const bar = document.getElementById('edit-bar');
@@ -281,12 +370,31 @@
             btn.classList.add('editing');
             bar.style.display = 'flex';
             exportBtn.style.display = 'inline-block';
+            document.getElementById('btn-password').style.display = 'inline-block';
+            document.getElementById('btn-sync').style.display = 'inline-block';
+
+            if (!getGitHubToken()) {
+                const token = prompt(
+                    '🔗 Conectar con GitHub\n\n' +
+                    'Pega tu token de GitHub (Settings > Developer settings > Personal access tokens > Fine-grained tokens)\n' +
+                    'Permisos necesarios: Contents (write)\n\n' +
+                    'O deja vacío para saltar:'
+                );
+                if (token) {
+                    setGitHubToken(token);
+                    syncToGitHub();
+                }
+            }
+
             enableDragOnAll();
         } else {
             btn.textContent = '✏️ Editar';
             btn.classList.remove('editing');
             bar.style.display = 'none';
             exportBtn.style.display = 'none';
+            document.getElementById('btn-password').style.display = 'none';
+            document.getElementById('btn-sync').style.display = 'none';
+            document.getElementById('sync-status').style.display = 'none';
             cancelPlacing();
             disableDragOnAll();
             closeModal();
@@ -339,6 +447,26 @@
     // ─── EVENTOS ───
     document.getElementById('btn-edit').addEventListener('click', toggleEditMode);
     document.getElementById('btn-add').addEventListener('click', startPlacing);
+    document.getElementById('btn-password').addEventListener('click', () => {
+        const old = prompt('Contraseña actual:');
+        if (old !== data.editPassword) { alert('Incorrecta'); return; }
+        const newPw = prompt('Nueva contraseña:');
+        if (!newPw) return;
+        const confirmPw = prompt('Confirma la nueva contraseña:');
+        if (newPw !== confirmPw) { alert('No coinciden'); return; }
+        data.editPassword = newPw;
+        saveState();
+        syncToGitHub();
+        alert('Contraseña cambiada correctamente');
+    });
+    document.getElementById('btn-sync').addEventListener('click', () => {
+        if (!getGitHubToken()) {
+            const token = prompt('Pega tu token de GitHub:');
+            if (token) setGitHubToken(token);
+            else return;
+        }
+        syncToGitHub();
+    });
     document.getElementById('btn-export').addEventListener('click', exportData);
     document.getElementById('btn-save').addEventListener('click', saveModal);
     document.getElementById('btn-cancel').addEventListener('click', closeModal);
