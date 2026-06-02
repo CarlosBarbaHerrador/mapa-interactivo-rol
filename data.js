@@ -1,10 +1,10 @@
 const MAP_DATA = {
-    "bounds": [[0, 0], [1382, 2048]],
-    "center": [691, 1024],
+    "bounds": [[0, 0], [691, 1024]],
+    "center": [345.5, 512],
     "zoom": 0,
     "minZoom": -2,
     "maxZoom": 3,
-    "mapImage": "mapa.png",
+    "mapImage": "mapa.jpg",
     "categories": {
         "city": { "label": "Ciudades", "icon": "🏰", "color": "#e94560" },
         "town": { "label": "Pueblos", "icon": "🏘️", "color": "#f5a623" },
@@ -22,7 +22,7 @@ const MAP_DATA = {
             "type": "city",
             "color": "#e94560",
             "region": "Reino Oni",
-            "coords": [1116, 1440],
+            "coords": [558, 720],
             "description": "Capital del pais Oni",
             "links": []
         }
