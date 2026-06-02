@@ -88,8 +88,8 @@
                 });
 
                 if (putRes.ok) {
-                    status.textContent = '☁️ guardado en GitHub ✅';
-                    setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 3000);
+                    status.textContent = '☁️ guardado en GitHub ✅ (tus amigos deben recargar)';
+                    setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 5000);
                     return;
                 }
 
@@ -231,7 +231,6 @@
         layerGroup.addLayer(marker);
         updateCounter();
         saveState();
-        syncToGitHub();
         openEditModal(id);
     }
 
@@ -304,7 +303,6 @@
         closeModal();
         updateCounter();
         saveState();
-        syncToGitHub();
     }
 
     // ─── ELIMINAR ───
@@ -319,7 +317,6 @@
         closeModal();
         updateCounter();
         saveState();
-        syncToGitHub();
     }
 
     // ─── CERRAR MODAL ───
@@ -463,7 +460,6 @@
         if (newPw !== confirmPw) { alert('No coinciden'); return; }
         data.editPassword = newPw;
         saveState();
-        syncToGitHub();
         alert('Contraseña cambiada correctamente');
     });
     document.getElementById('btn-sync').addEventListener('click', () => {
