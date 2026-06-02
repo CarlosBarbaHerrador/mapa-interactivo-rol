@@ -1,71 +1,29 @@
 const MAP_DATA = {
-    "bounds": [
-        [
-            0,
-            0
-        ],
-        [
-            691,
-            1024
-        ]
-    ],
-    "center": [
-        345.5,
-        512
-    ],
+    "bounds": [[0, 0], [691, 1024]],
+    "center": [345.5, 512],
     "zoom": 0,
     "minZoom": -2,
     "maxZoom": 3,
     "mapImage": "mapa.jpg",
     "categories": {
-        "city": {
-            "label": "Ciudades",
-            "icon": "🏰",
-            "color": "#e94560"
-        },
-        "town": {
-            "label": "Pueblos",
-            "icon": "🏘️",
-            "color": "#f5a623"
-        },
-        "dungeon": {
-            "label": "Mazmorras",
-            "icon": "⚔️",
-            "color": "#7b2d8b"
-        },
-        "landmark": {
-            "label": "Lugares Emblemáticos",
-            "icon": "🏛️",
-            "color": "#2ecc71"
-        },
-        "nature": {
-            "label": "Naturaleza",
-            "icon": "🌲",
-            "color": "#27ae60"
-        },
-        "port": {
-            "label": "Puertos",
-            "icon": "⚓",
-            "color": "#3498db"
-        },
-        "shop": {
-            "label": "Tiendas",
-            "icon": "🛒",
-            "color": "#f1c40f"
-        }
+        "capital": { "label": "Capitales", "icon": "👑", "color": "#ffd700" },
+        "city": { "label": "Ciudades", "icon": "🏰", "color": "#e94560" },
+        "town": { "label": "Pueblos", "icon": "🏘️", "color": "#f5a623" },
+        "dungeon": { "label": "Mazmorras", "icon": "⚔️", "color": "#7b2d8b" },
+        "landmark": { "label": "Lugares Emblemáticos", "icon": "🏛️", "color": "#2ecc71" },
+        "nature": { "label": "Naturaleza", "icon": "🌲", "color": "#27ae60" },
+        "port": { "label": "Puertos", "icon": "⚓", "color": "#3498db" },
+        "shop": { "label": "Tiendas", "icon": "🛒", "color": "#f1c40f" }
     },
     "regions": [],
     "pois": [
         {
             "id": "m1",
             "name": "Obelisco",
-            "type": "city",
+            "type": "capital",
             "color": "#e94560",
             "region": "",
-            "coords": [
-                344.09946423984445,
-                482.5
-            ],
+            "coords": [344.1, 482.5],
             "description": "",
             "links": []
         }
