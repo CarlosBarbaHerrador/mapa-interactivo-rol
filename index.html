@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Interactivo - Editor</title>
+    <meta property="og:title" content="Mapa del Servidor de Rol">
+    <meta property="og:description" content="Mapa interactivo del mundo de rol">
+    <meta property="og:type" content="website">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div id="header">
+        <h1>🗺️ Mapa del Reino</h1>
+        <div id="header-actions">
+            <button id="btn-export" class="btn btn-secondary" title="Exportar data.js" style="display:none">📥 Exportar</button>
+            <button id="btn-edit" class="btn">✏️ Editar</button>
+        </div>
+    </div>
+
+    <div id="edit-bar" style="display:none">
+        <span>✏️ <strong>Modo edición</strong></span>
+        <button id="btn-add" class="btn btn-primary btn-sm">➕ Nueva ubicación</button>
+        <span class="edit-hint">arrastra marcadores para moverlos</span>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="stats-bar">
+        <span><strong>📍</strong> <span id="poi-count">0</span> puntos</span>
+        <span>🖱️ Arrastra · Rueda zoom</span>
+    </div>
+
+    <!-- Modal de edición -->
+    <div id="modal-overlay" style="display:none">
+        <div id="modal">
+            <div id="modal-header">
+                <h3 id="modal-title">Añadir punto</h3>
+                <button id="modal-close" class="btn-close">&times;</button>
+            </div>
+            <div id="modal-body">
+                <input type="hidden" id="edit-id">
+                <input type="hidden" id="edit-coords">
+
+                <label>Nombre</label>
+                <input type="text" id="edit-name" placeholder="Ej: Capital Real" autocomplete="off">
+
+                <label>Categoría</label>
+                <select id="edit-type"></select>
+
+                <label>Color del marcador</label>
+                <div class="color-row">
+                    <input type="color" id="edit-color" value="#e94560">
+                    <button id="btn-random-color" class="btn-sm" title="Color aleatorio">🎲</button>
+                </div>
+
+                <label>Región</label>
+                <input type="text" id="edit-region" placeholder="Ej: Reino del Norte">
+
+                <label>Descripción</label>
+                <textarea id="edit-desc" rows="3" placeholder="Describe este lugar..."></textarea>
+
+                <label>Enlace Discord (opcional)</label>
+                <input type="text" id="edit-link" placeholder="https://discord.gg/...">
+
+                <label>Etiqueta del enlace (opcional)</label>
+                <input type="text" id="edit-link-text" placeholder="Ej: 📍 Discord">
+            </div>
+            <div id="modal-footer">
+                <button id="btn-delete" class="btn btn-danger" style="display:none">🗑️ Eliminar</button>
+                <span style="flex:1"></span>
+                <button id="btn-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-save" class="btn btn-primary">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="data.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
