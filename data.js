@@ -58,15 +58,15 @@ const MAP_DATA = {
     "pois": [
         {
             "id": "m1",
-            "name": "Nuevo punto",
+            "name": "Capital ONI",
             "type": "city",
             "color": "#e94560",
-            "region": "",
+            "region": "Reino Oni",
             "coords": [
                 3489.022788154563,
                 4500
             ],
-            "description": "",
+            "description": "Capital del pais Oni",
             "links": []
         }
     ],
