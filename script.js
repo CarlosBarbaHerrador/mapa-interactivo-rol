@@ -54,52 +54,59 @@
         status.style.display = 'inline';
         status.textContent = '☁️ subiendo...';
 
-        try {
-            const gh = data.github;
-            const content = generateDataJs();
-            const encoded = btoa(unescape(encodeURIComponent(content)));
+        const gh = data.github;
+        const content = generateDataJs();
+        const encoded = btoa(unescape(encodeURIComponent(content)));
 
-            // Obtener SHA actual del archivo
-            const getUrl = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}?ref=${gh.branch}`;
-            let sha = '';
+        for (let attempt = 0; attempt < 3; attempt++) {
             try {
+                // Obtener SHA actual
+                const getUrl = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}`;
                 const getRes = await fetch(getUrl, {
                     headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
                 });
+                let sha = '';
                 if (getRes.ok) {
                     const getData = await getRes.json();
                     sha = getData.sha;
                 }
-            } catch (e) {}
 
-            // Subir archivo
-            const putUrl = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/${gh.path}`;
-            const putRes = await fetch(putUrl, {
-                method: 'PUT',
-                headers: {
-                    Authorization: `token ${token}`,
-                    Accept: 'application/vnd.github.v3+json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: 'Actualizar mapa desde editor',
-                    content: encoded,
-                    sha: sha || undefined,
-                    branch: gh.branch
-                })
-            });
+                // Subir archivo
+                const putRes = await fetch(getUrl, {
+                    method: 'PUT',
+                    headers: {
+                        Authorization: `token ${token}`,
+                        Accept: 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: 'Actualizar mapa desde editor',
+                        content: encoded,
+                        sha: sha || undefined,
+                        branch: gh.branch
+                    })
+                });
 
-            if (putRes.ok) {
-                status.textContent = '☁️ guardado en GitHub ✅';
-                setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 3000);
-            } else {
+                if (putRes.ok) {
+                    status.textContent = '☁️ guardado en GitHub ✅';
+                    setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 3000);
+                    return;
+                }
+
                 const err = await putRes.json();
+                if (putRes.status === 409 && attempt < 2) {
+                    // SHA desactualizado, reintentar
+                    status.textContent = '☁️ reintentando...';
+                    continue;
+                }
                 status.textContent = '☁️ error: ' + (err.message || 'desconocido');
                 setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 5000);
+                return;
+            } catch (e) {
+                if (attempt < 2) continue;
+                status.textContent = '☁️ error de conexión';
+                setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 5000);
             }
-        } catch (e) {
-            status.textContent = '☁️ error de conexión';
-            setTimeout(() => { status.textContent = ''; status.style.display = 'none'; }, 5000);
         }
     }
 
