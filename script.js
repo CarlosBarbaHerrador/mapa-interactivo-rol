@@ -50,7 +50,7 @@
 
         const svgNS = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNS, 'svg');
-        svg.setAttribute('viewBox', '0 0 2048 1382');
+        svg.setAttribute('viewBox', '0 0 4096 2389');
         svg.setAttribute('width', '100%');
         svg.setAttribute('height', '100%');
         svg.style.pointerEvents = 'none';
@@ -76,9 +76,9 @@
                 path.setAttribute('transform', region.transform);
             }
             path.setAttribute('data-region', region.name);
-            path.setAttribute('fill', region.color ? region.color + '30' : 'rgba(233,69,96,0.15)');
-            path.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-            path.setAttribute('stroke-width', '2');
+            path.setAttribute('fill', 'transparent');
+            path.setAttribute('stroke', 'none');
+            path.setAttribute('stroke-width', '0');
             path.setAttribute('stroke-linecap', 'round');
             path.setAttribute('stroke-linejoin', 'round');
             path.style.pointerEvents = 'auto';
@@ -86,6 +86,7 @@
             path.style.transition = 'all 0.2s ease';
 
             path.addEventListener('mouseenter', () => {
+                if (!hoverEnabled) return;
                 path.setAttribute('stroke', region.color || '#e94560');
                 path.setAttribute('stroke-width', '4');
                 path.setAttribute('fill', (region.color || '#e94560') + '60');
@@ -94,9 +95,9 @@
 
             path.addEventListener('mouseleave', () => {
                 if (activeRegion !== region.name) {
-                    path.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-                    path.setAttribute('stroke-width', '2');
-                    path.setAttribute('fill', (region.color || '#e94560') + '30');
+                    path.setAttribute('fill', 'transparent');
+                    path.setAttribute('stroke', 'none');
+                    path.setAttribute('stroke-width', '0');
                     path.removeAttribute('filter');
                 }
             });
@@ -114,6 +115,31 @@
     }
 
     initRegions();
+
+    // ─── HOVER TOGGLE ───
+    let hoverEnabled = true;
+
+    function toggleHover() {
+        hoverEnabled = !hoverEnabled;
+        const btn = document.getElementById('btn-toggle-hover');
+        btn.classList.toggle('off', !hoverEnabled);
+        btn.textContent = hoverEnabled ? '🌍 Países' : '🌍 Países';
+        btn.title = hoverEnabled ? 'Desactivar bordes al pasar el ratón' : 'Activar bordes al pasar el ratón';
+
+        if (!hoverEnabled) {
+            data.regions.forEach(r => {
+                if (r.name === activeRegion) return;
+                const p = document.querySelector(`[data-region="${r.name}"]`);
+                if (!p) return;
+                p.setAttribute('fill', 'transparent');
+                p.setAttribute('stroke', 'none');
+                p.setAttribute('stroke-width', '0');
+                p.removeAttribute('filter');
+            });
+        }
+    }
+
+    document.getElementById('btn-toggle-hover').addEventListener('click', toggleHover);
 
     // ─── PANEL DE REGIÓN ───
     let activeRegion = null;
@@ -185,9 +211,9 @@
         data.regions.forEach(r => {
             const path = document.querySelector(`[data-region="${r.name}"]`);
             if (!path) return;
-            path.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-            path.setAttribute('stroke-width', '2');
-            path.setAttribute('fill', (r.color || '#e94560') + '30');
+            path.setAttribute('fill', 'transparent');
+            path.setAttribute('stroke', 'none');
+            path.setAttribute('stroke-width', '0');
             path.removeAttribute('filter');
         });
     }

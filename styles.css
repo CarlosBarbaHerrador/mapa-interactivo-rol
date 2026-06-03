@@ -157,6 +157,30 @@ body {
     pointer-events: none;
 }
 
+.btn-toggle-hover {
+    background: none;
+    border: 2px solid #2a4a7a;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    line-height: 1.4;
+    color: #7a9aba;
+    font-family: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.btn-toggle-hover:hover {
+    border-color: #e94560;
+    color: #c0d0f0;
+}
+.btn-toggle-hover.off {
+    border-color: #3a2a3a;
+    color: #5a5a6a;
+    opacity: 0.5;
+}
+
 /* ─── MODAL ─── */
 #modal-overlay {
     position: fixed;
