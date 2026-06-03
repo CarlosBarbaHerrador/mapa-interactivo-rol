@@ -35,6 +35,28 @@
         <span>🖱️ Arrastra · Rueda zoom</span>
     </div>
 
+    <div id="region-panel" class="region-panel-closed">
+        <div id="region-panel-header">
+            <h2 id="region-panel-title"></h2>
+            <button id="region-panel-close" class="btn-close">&times;</button>
+        </div>
+        <div id="region-panel-body">
+            <div id="region-panel-read">
+                <p id="region-panel-desc"></p>
+            </div>
+            <div id="region-panel-edit" style="display:none">
+                <label>Descripción</label>
+                <textarea id="region-edit-desc" rows="4"></textarea>
+                <label>Color del borde</label>
+                <div class="color-row">
+                    <input type="color" id="region-edit-color" value="#e94560">
+                    <button id="region-edit-random-color" class="btn-sm" title="Color aleatorio">🎲</button>
+                </div>
+                <button id="region-edit-save" class="btn btn-primary" style="margin-top:12px">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de edición -->
     <div id="modal-overlay" style="display:none">
         <div id="modal">

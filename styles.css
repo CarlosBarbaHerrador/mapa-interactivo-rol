@@ -373,6 +373,84 @@ body {
 
 
 
+/* ─── PANEL DE REGIÓN ─── */
+#region-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 320px;
+    height: 100vh;
+    background: linear-gradient(180deg, #16213e, #0f1a30);
+    border-left: 2px solid #2a3a6a;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -8px 0 32px rgba(0,0,0,0.5);
+}
+
+#region-panel.region-panel-open {
+    transform: translateX(0);
+}
+
+#region-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #2a3a6a;
+}
+
+#region-panel-title {
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 700;
+    padding: 0;
+    margin: 0;
+}
+
+#region-panel-edit label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #8a9aba;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#region-panel-edit textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #2a3a6a;
+    border-radius: 8px;
+    background: #0a1628;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.2s;
+}
+
+#region-panel-edit textarea:focus {
+    border-color: #e94560;
+}
+
+#region-panel-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+#region-panel-desc {
+    color: #b0b0c0;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
 /* ─── RESPONSIVE ─── */
 @media (max-width: 640px) {
     #header h1 { font-size: 1rem; }

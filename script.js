@@ -14,6 +14,197 @@
     L.imageOverlay(data.mapImage, imageBounds).addTo(map);
     map.setView(data.center, data.zoom);
 
+    // ─── PERSISTENCIA DE REGIONES ───
+    const REGION_STORAGE_KEY = 'mapa_rol_regions';
+
+    function saveRegionsState() {
+        try {
+            const saved = data.regions.map(r => ({
+                name: r.name, description: r.description,
+                color: r.color, path: r.path, transform: r.transform
+            }));
+            localStorage.setItem(REGION_STORAGE_KEY, JSON.stringify(saved));
+        } catch (e) {}
+    }
+
+    function loadRegionsData() {
+        try {
+            const raw = localStorage.getItem(REGION_STORAGE_KEY);
+            if (!raw) return;
+            const saved = JSON.parse(raw);
+            saved.forEach(sr => {
+                const match = data.regions.find(r => r.name === sr.name);
+                if (match) {
+                    if (sr.description !== undefined) match.description = sr.description;
+                    if (sr.color !== undefined) match.color = sr.color;
+                }
+            });
+        } catch (e) {}
+    }
+
+    loadRegionsData();
+
+    // ─── REGIONES (SVG overlay) ───
+    function initRegions() {
+        if (!data.regions || data.regions.length === 0) return;
+
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('viewBox', '0 0 2048 1382');
+        svg.setAttribute('width', '100%');
+        svg.setAttribute('height', '100%');
+        svg.style.pointerEvents = 'none';
+
+        const defs = document.createElementNS(svgNS, 'defs');
+        defs.innerHTML = `
+            <filter id="region-glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+                <feFlood flood-color="#ffffff" flood-opacity="0.8" result="color"/>
+                <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+                <feMerge>
+                    <feMergeNode in="shadow"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+        `;
+        svg.appendChild(defs);
+
+        data.regions.forEach(region => {
+            const path = document.createElementNS(svgNS, 'path');
+            path.setAttribute('d', region.path);
+            if (region.transform) {
+                path.setAttribute('transform', region.transform);
+            }
+            path.setAttribute('data-region', region.name);
+            path.setAttribute('fill', region.color ? region.color + '30' : 'rgba(233,69,96,0.15)');
+            path.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.style.pointerEvents = 'auto';
+            path.style.cursor = 'pointer';
+            path.style.transition = 'all 0.2s ease';
+
+            path.addEventListener('mouseenter', () => {
+                path.setAttribute('stroke', region.color || '#e94560');
+                path.setAttribute('stroke-width', '4');
+                path.setAttribute('fill', (region.color || '#e94560') + '60');
+                path.setAttribute('filter', 'url(#region-glow)');
+            });
+
+            path.addEventListener('mouseleave', () => {
+                if (activeRegion !== region.name) {
+                    path.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+                    path.setAttribute('stroke-width', '2');
+                    path.setAttribute('fill', (region.color || '#e94560') + '30');
+                    path.removeAttribute('filter');
+                }
+            });
+
+            path.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openRegionPanel(region);
+            });
+
+            svg.appendChild(path);
+        });
+
+        const overlay = L.svgOverlay(svg, data.bounds, { interactive: false });
+        overlay.addTo(map);
+    }
+
+    initRegions();
+
+    // ─── PANEL DE REGIÓN ───
+    let activeRegion = null;
+
+    function openRegionPanel(region) {
+        activeRegion = region.name;
+        document.getElementById('region-panel-title').textContent = region.name;
+        document.getElementById('region-panel-desc').textContent = region.description || '';
+
+        // Edit mode fields
+        const inEdit = editMode;
+        document.getElementById('region-panel-read').style.display = inEdit ? 'none' : 'block';
+        document.getElementById('region-panel-edit').style.display = inEdit ? 'block' : 'none';
+        if (inEdit) {
+            document.getElementById('region-edit-desc').value = region.description || '';
+            document.getElementById('region-edit-color').value = region.color || '#e94560';
+            document.getElementById('region-edit-save').dataset.regionName = region.name;
+        }
+
+        document.getElementById('region-panel').className = 'region-panel-open';
+
+        // Reset all regions first
+        data.regions.forEach(r => {
+            const p = document.querySelector(`[data-region="${r.name}"]`);
+            if (!p) return;
+            p.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+            p.setAttribute('stroke-width', '2');
+            p.setAttribute('fill', (r.color || '#e94560') + '30');
+            p.removeAttribute('filter');
+        });
+        // Highlight selected
+        const sel = document.querySelector(`[data-region="${region.name}"]`);
+        if (sel) {
+            sel.setAttribute('stroke', region.color || '#e94560');
+            sel.setAttribute('stroke-width', '4');
+            sel.setAttribute('fill', (region.color || '#e94560') + '60');
+            sel.setAttribute('filter', 'url(#region-glow)');
+        }
+    }
+
+    function saveRegionEdit() {
+        const name = document.getElementById('region-edit-save').dataset.regionName;
+        if (!name) return;
+        const region = data.regions.find(r => r.name === name);
+        if (!region) return;
+
+        const desc = document.getElementById('region-edit-desc').value.trim();
+        const color = document.getElementById('region-edit-color').value;
+
+        region.description = desc;
+        region.color = color;
+
+        // Update path visuals
+        const path = document.querySelector(`[data-region="${name}"]`);
+        if (path) {
+            path.setAttribute('stroke', color);
+            path.setAttribute('fill', color + '60');
+            path.setAttribute('stroke-width', '4');
+            path.setAttribute('filter', 'url(#region-glow)');
+        }
+
+        document.getElementById('region-panel-desc').textContent = desc;
+        saveRegionsState();
+    }
+
+    function closeRegionPanel() {
+        activeRegion = null;
+        document.getElementById('region-panel').className = 'region-panel-closed';
+        data.regions.forEach(r => {
+            const path = document.querySelector(`[data-region="${r.name}"]`);
+            if (!path) return;
+            path.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('fill', (r.color || '#e94560') + '30');
+            path.removeAttribute('filter');
+        });
+    }
+
+    document.getElementById('region-panel-close').addEventListener('click', closeRegionPanel);
+    document.getElementById('region-edit-save').addEventListener('click', saveRegionEdit);
+    document.getElementById('region-edit-random-color').addEventListener('click', () => {
+        const r = Math.floor(Math.random() * 200 + 55).toString(16).padStart(2, '0');
+        const g = Math.floor(Math.random() * 200 + 55).toString(16).padStart(2, '0');
+        const b = Math.floor(Math.random() * 200 + 55).toString(16).padStart(2, '0');
+        document.getElementById('region-edit-color').value = '#' + r + g + b;
+    });
+
+    map.on('click', function () {
+        if (activeRegion) closeRegionPanel();
+    });
+
     // ─── ESTADO ───
     let editMode = false;
     let placing = false;
@@ -224,6 +415,7 @@
         marker.on('dragend', () => {
             const pos = marker.getLatLng();
             if (markers[id]) markers[id].poi.coords = [pos.lat, pos.lng];
+            saveState();
         });
         marker.on('click', () => openEditModal(id));
 
@@ -403,6 +595,12 @@
             disableDragOnAll();
             closeModal();
         }
+
+        // Refresh region panel if open
+        if (activeRegion) {
+            const region = data.regions.find(r => r.name === activeRegion);
+            if (region) openRegionPanel(region);
+        }
     }
 
     // ─── PLACING ───
@@ -437,6 +635,12 @@
             e.marker.dragging?.enable();
             e.marker.off('click');
             e.marker.on('click', () => openEditModal(e.poi.id));
+            e.marker.off('dragend');
+            e.marker.on('dragend', () => {
+                const pos = e.marker.getLatLng();
+                e.poi.coords = [pos.lat, pos.lng];
+                saveState();
+            });
         });
     }
 
