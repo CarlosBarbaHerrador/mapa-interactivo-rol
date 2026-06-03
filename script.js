@@ -103,6 +103,7 @@
             });
 
             path.addEventListener('click', (e) => {
+                if (!clickEnabled) return;
                 e.stopPropagation();
                 openRegionPanel(region);
             });
@@ -116,17 +117,15 @@
 
     initRegions();
 
-    // ─── HOVER TOGGLE ───
+    // ─── TOGGLES ───
     let hoverEnabled = true;
+    let clickEnabled = true;
 
-    function toggleHover() {
-        hoverEnabled = !hoverEnabled;
-        const btn = document.getElementById('btn-toggle-hover');
-        btn.classList.toggle('off', !hoverEnabled);
-        btn.textContent = hoverEnabled ? '🌍 Países' : '🌍 Países';
-        btn.title = hoverEnabled ? 'Desactivar bordes al pasar el ratón' : 'Activar bordes al pasar el ratón';
-
-        if (!hoverEnabled) {
+    function setHoverState(state) {
+        hoverEnabled = state;
+        document.getElementById('btn-toggle-hover').classList.toggle('off', !state);
+        document.getElementById('btn-toggle-hover').title = state ? 'Desactivar bordes al pasar el ratón' : 'Activar bordes al pasar el ratón';
+        if (!state) {
             data.regions.forEach(r => {
                 if (r.name === activeRegion) return;
                 const p = document.querySelector(`[data-region="${r.name}"]`);
@@ -139,7 +138,26 @@
         }
     }
 
-    document.getElementById('btn-toggle-hover').addEventListener('click', toggleHover);
+    function setClickState(state) {
+        clickEnabled = state;
+        document.getElementById('btn-toggle-click').classList.toggle('off', !state);
+        document.getElementById('btn-toggle-click').title = state ? 'Desactivar clic en países' : 'Activar clic en países';
+        if (!state && activeRegion) closeRegionPanel();
+    }
+
+    document.getElementById('btn-toggle-hover').addEventListener('click', () => setHoverState(!hoverEnabled));
+    document.getElementById('btn-toggle-click').addEventListener('click', () => setClickState(!clickEnabled));
+
+    function toggleAll() {
+        const newState = hoverEnabled || clickEnabled ? false : true;
+        setHoverState(newState);
+        setClickState(newState);
+        const btn = document.getElementById('btn-toggle-all');
+        btn.classList.toggle('off', !newState);
+        btn.title = newState ? 'Desactivar todo' : 'Activar todo';
+    }
+
+    document.getElementById('btn-toggle-all').addEventListener('click', toggleAll);
 
     // ─── PANEL DE REGIÓN ───
     let activeRegion = null;
@@ -228,6 +246,7 @@
     });
 
     map.on('click', function () {
+        if (!clickEnabled) return;
         if (activeRegion) closeRegionPanel();
     });
 
