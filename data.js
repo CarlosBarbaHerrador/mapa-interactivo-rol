@@ -1,19 +1,63 @@
 const MAP_DATA = {
-    "bounds": [[0, 0], [1382, 2048]],
-    "center": [691, 1024],
+    "bounds": [
+        [
+            0,
+            0
+        ],
+        [
+            1382,
+            2048
+        ]
+    ],
+    "center": [
+        691,
+        1024
+    ],
     "zoom": -1,
     "minZoom": -3,
     "maxZoom": 3,
     "mapImage": "Mapa-Limpio.png",
     "categories": {
-        "capital": { "label": "Capitales", "icon": "👑", "color": "#ffd700" },
-        "city": { "label": "Ciudades", "icon": "🏰", "color": "#e94560" },
-        "town": { "label": "Pueblos", "icon": "🏘️", "color": "#f5a623" },
-        "dungeon": { "label": "Mazmorras", "icon": "⚔️", "color": "#7b2d8b" },
-        "landmark": { "label": "Lugares Emblemáticos", "icon": "🏛️", "color": "#2ecc71" },
-        "nature": { "label": "Naturaleza", "icon": "🌲", "color": "#27ae60" },
-        "port": { "label": "Puertos", "icon": "⚓", "color": "#3498db" },
-        "shop": { "label": "Tiendas", "icon": "🛒", "color": "#f1c40f" }
+        "capital": {
+            "label": "Capitales",
+            "icon": "👑",
+            "color": "#ffd700"
+        },
+        "city": {
+            "label": "Ciudades",
+            "icon": "🏰",
+            "color": "#e94560"
+        },
+        "town": {
+            "label": "Pueblos",
+            "icon": "🏘️",
+            "color": "#f5a623"
+        },
+        "dungeon": {
+            "label": "Mazmorras",
+            "icon": "⚔️",
+            "color": "#7b2d8b"
+        },
+        "landmark": {
+            "label": "Lugares Emblemáticos",
+            "icon": "🏛️",
+            "color": "#2ecc71"
+        },
+        "nature": {
+            "label": "Naturaleza",
+            "icon": "🌲",
+            "color": "#27ae60"
+        },
+        "port": {
+            "label": "Puertos",
+            "icon": "⚓",
+            "color": "#3498db"
+        },
+        "shop": {
+            "label": "Tiendas",
+            "icon": "🛒",
+            "color": "#f1c40f"
+        }
     },
     "regions": [
         {
@@ -31,7 +75,10 @@ const MAP_DATA = {
             "type": "capital",
             "color": "#e94560",
             "region": "",
-            "coords": [344.1, 482.5],
+            "coords": [
+                688.3817979156728,
+                966.875
+            ],
             "description": "",
             "links": []
         }
