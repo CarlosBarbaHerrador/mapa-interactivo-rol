@@ -249,6 +249,7 @@
                 if (stateRow && stateRow.points && Array.isArray(stateRow.points)) {
                     data.paint = stateRow.points;
                 }
+                if (data.paint.length > 0 && !offscreenCtx) initPaintSystem();
                 if (offscreenCtx) {
                     offscreenCtx.globalCompositeOperation = 'source-over';
                     offscreenCtx.clearRect(0, 0, 4096, 2389);
