@@ -1,6 +1,13 @@
 (function () {
     const data = MAP_DATA;
 
+    function hexAlpha(hex, a) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+    }
+
     // ─── MAPA ───
     const map = L.map('map', {
         crs: L.CRS.Simple,
@@ -14,10 +21,98 @@
     L.imageOverlay(data.mapImage, imageBounds).addTo(map);
     map.setView(data.center, data.zoom);
 
-
-
     // ─── REGIONES (SVG overlay) ───
     let svgOverlayRef = null;
+
+    const BOUNDARY_STROKE = 'none';
+    const BOUNDARY_WIDTH = '0';
+
+    function createRegionSvg(svgNS, region) {
+        const g = document.createElementNS(svgNS, 'g');
+        g.setAttribute('data-region', region.name);
+        const rc = region.color || '#e94560';
+        const allPaths = [{ d: region.path, transform: region.transform, type: 'main' }];
+        if (region.extraPaths) allPaths.push(...region.extraPaths);
+
+        const lakes = allPaths.filter(p => p.type === 'lake');
+        if (lakes.length > 0) {
+            const maskId = 'mask-' + region.name.replace(/\s+/g, '_');
+            const mask = document.createElementNS(svgNS, 'mask');
+            mask.setAttribute('id', maskId);
+            const rect = document.createElementNS(svgNS, 'rect');
+            rect.setAttribute('width', '100%');
+            rect.setAttribute('height', '100%');
+            rect.setAttribute('fill', 'white');
+            mask.appendChild(rect);
+            lakes.forEach(lp => {
+                const lpEl = document.createElementNS(svgNS, 'path');
+                lpEl.setAttribute('d', lp.d);
+                if (lp.transform) lpEl.setAttribute('transform', lp.transform);
+                lpEl.setAttribute('fill', 'black');
+                mask.appendChild(lpEl);
+            });
+            g.setAttribute('mask', 'url(#' + maskId + ')');
+            (g._defs || (g._defs = [])).push(mask);
+        }
+
+        allPaths.forEach((ap) => {
+            const path = document.createElementNS(svgNS, 'path');
+            path.setAttribute('d', ap.d);
+            if (ap.transform) path.setAttribute('transform', ap.transform);
+            path.setAttribute('data-region', region.name);
+            if (ap.type === 'lake') {
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', 'none');
+                path.style.pointerEvents = 'none';
+            } else {
+                path.setAttribute('fill', hexAlpha(rc, 0.1));
+                path.setAttribute('stroke', BOUNDARY_STROKE);
+                path.setAttribute('stroke-width', BOUNDARY_WIDTH);
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('stroke-linejoin', 'round');
+                path.style.pointerEvents = 'auto';
+                path.style.cursor = 'pointer';
+                path.style.transition = 'all 0.2s ease';
+            }
+            g.appendChild(path);
+        });
+
+        let _gHighlighted = false;
+        const highlightGroup = (on) => {
+            g.querySelectorAll('path:not([fill="none"])').forEach(p => {
+                if (on) {
+                    p.setAttribute('stroke', rc);
+                    p.setAttribute('stroke-width', '4');
+                    p.setAttribute('fill', hexAlpha(rc, 0.38));
+                    p.setAttribute('filter', 'url(#region-glow)');
+                } else {
+                    p.setAttribute('fill', hexAlpha(rc, 0.1));
+                    p.setAttribute('stroke', BOUNDARY_STROKE);
+                    p.setAttribute('stroke-width', BOUNDARY_WIDTH);
+                    p.removeAttribute('filter');
+                }
+            });
+        };
+
+        g.addEventListener('mouseover', () => {
+            if (!hoverEnabled || _gHighlighted) return;
+            _gHighlighted = true;
+            highlightGroup(true);
+        });
+        g.addEventListener('mouseout', (e) => {
+            if (!_gHighlighted) return;
+            if (e.relatedTarget && g.contains(e.relatedTarget)) return;
+            _gHighlighted = false;
+            if (activeRegion !== region.name) highlightGroup(false);
+        });
+        g.addEventListener('click', (e) => {
+            if (!clickEnabled) return;
+            e.stopPropagation();
+            openRegionPanel(region);
+        });
+
+        return g;
+    }
 
     function initRegions() {
         if (!data.regions || data.regions.length === 0) return;
@@ -44,46 +139,9 @@
         svg.appendChild(defs);
 
         data.regions.forEach(region => {
-            const path = document.createElementNS(svgNS, 'path');
-            path.setAttribute('d', region.path);
-            if (region.transform) {
-                path.setAttribute('transform', region.transform);
-            }
-            path.setAttribute('data-region', region.name);
-            path.setAttribute('fill', 'transparent');
-            path.setAttribute('stroke', 'none');
-            path.setAttribute('stroke-width', '0');
-            path.setAttribute('stroke-linecap', 'round');
-            path.setAttribute('stroke-linejoin', 'round');
-            path.style.pointerEvents = 'auto';
-            path.style.cursor = 'pointer';
-            path.style.transition = 'all 0.2s ease';
-
-            path.addEventListener('mouseenter', () => {
-                if (!hoverEnabled) return;
-                path.setAttribute('stroke', region.color || '#e94560');
-                path.setAttribute('stroke-width', '4');
-                path.setAttribute('fill', (region.color || '#e94560') + '60');
-                path.setAttribute('filter', 'url(#region-glow)');
-            });
-
-            path.addEventListener('mouseleave', () => {
-                if (!hoverEnabled) return;
-                if (activeRegion !== region.name) {
-                    path.setAttribute('fill', 'transparent');
-                    path.setAttribute('stroke', 'none');
-                    path.setAttribute('stroke-width', '0');
-                    path.removeAttribute('filter');
-                }
-            });
-
-            path.addEventListener('click', (e) => {
-                if (!clickEnabled) return;
-                e.stopPropagation();
-                openRegionPanel(region);
-            });
-
-            svg.appendChild(path);
+            const g = createRegionSvg(svgNS, region);
+            if (g._defs) g._defs.forEach(d => defs.appendChild(d));
+            svg.appendChild(g);
         });
 
         const overlay = L.svgOverlay(svg, data.bounds, { interactive: false });
@@ -101,6 +159,69 @@
     let regionPolygon = null;
     let vertexMarkers = [];
     let _rbLastClick = 0;
+
+    // Sub‑path support (islands, lakes)
+    let _subPaths = [];        // [{ verts: [], type: 'island'|'lake' }]
+    let _activeSubIdx = -1;    // -1 = main, 0+ = sub‑path
+    let _subPolygons = [];     // Leaflet polygons for committed sub‑paths
+
+    function getActiveVerts() {
+        return _activeSubIdx < 0 ? regionVerts : _subPaths[_activeSubIdx].verts;
+    }
+    function setActiveVerts(v) {
+        if (_activeSubIdx < 0) regionVerts = v;
+        else _subPaths[_activeSubIdx].verts = v;
+    }
+    function getActivePathInfo() {
+        return _activeSubIdx < 0 ? { type: 'main', label: 'Frontera principal' }
+            : { type: _subPaths[_activeSubIdx].type, label: (_subPaths[_activeSubIdx].type === 'island' ? 'Isla' : 'Lago') + ' ' + (_activeSubIdx + 1) };
+    }
+
+    function rebuildSubPolygons() {
+        _subPolygons.forEach(p => map.removeLayer(p));
+        _subPolygons = [];
+        _subPaths.forEach((sp, idx) => {
+            if (idx === _activeSubIdx || sp.verts.length < 3) return;
+            const coords = sp.verts.map(p => [p.y, p.x]);
+            coords.push(coords[0]);
+            const color = sp.type === 'lake' ? '#4488ff' : '#e94560';
+            const poly = L.polygon(coords, {
+                color: color, weight: 2, fillColor: color, fillOpacity: sp.type === 'lake' ? 0 : 0.2,
+                interactive: false, dashArray: sp.type === 'lake' ? '' : ''
+            }).addTo(map);
+            _subPolygons.push(poly);
+        });
+    }
+
+    function updatePathNav() {
+        const nav = document.getElementById('rb-path-nav');
+        nav.innerHTML = '';
+        const pills = [];
+        pills.push({ label: 'Main', idx: -1, active: _activeSubIdx === -1 });
+        _subPaths.forEach((sp, idx) => {
+            const icon = sp.type === 'lake' ? '🏞️' : '🏝️';
+            const label = icon + ' ' + (idx + 1);
+            pills.push({ label, idx, active: idx === _activeSubIdx });
+        });
+        if (pills.length <= 1) { nav.style.display = 'none'; return; }
+        nav.style.display = 'inline-block';
+        pills.forEach(p => {
+            const btn = document.createElement('button');
+            btn.className = 'path-pill' + (p.active ? ' path-pill-active' : '');
+            btn.textContent = p.label;
+            btn.addEventListener('click', () => {
+                if (p.idx === _activeSubIdx) return;
+                if (_selectMode) toggleSelectMode();
+                _activeSubIdx = p.idx;
+                _regionUndoStack = [];
+                rebuildVertexMarkers();
+                rebuildRegionPreview();
+                updateRegionUI();
+                updatePathNav();
+            });
+            nav.appendChild(btn);
+        });
+    }
 
     function getImageCoords(containerPoint) {
         const ll = map.containerPointToLatLng(containerPoint);
@@ -197,6 +318,105 @@
         return pts;
     }
 
+    function parseSubPathVerts(pathD, transform) {
+        const m = transform ? transform.match(/translate\(([\d.-]+),\s*([\d.-]+)\)/) : null;
+        const tx = m ? parseFloat(m[1]) : 0;
+        const ty = m ? parseFloat(m[2]) : 0;
+        const pts = [];
+        const str = pathD;
+        let i = 0, curX = 0, curY = 0;
+        const len = str.length;
+        function readNum() {
+            while (i < len && (str[i] === ' ' || str[i] === ',' || str[i] === '\t' || str[i] === '\n')) i++;
+            if (i >= len) return NaN;
+            let start = i, hasDot = false;
+            if (str[i] === '-' || str[i] === '+') i++;
+            while (i < len) {
+                const c = str[i];
+                if (c >= '0' && c <= '9') { i++; continue; }
+                if (c === '.' && !hasDot) { hasDot = true; i++; continue; }
+                break;
+            }
+            if (start === i) return NaN;
+            return parseFloat(str.slice(start, i));
+        }
+        function addPt() {
+            pts.push({ x: curX + tx, y: IMG_H - (curY + ty) });
+        }
+        while (i < len) {
+            let cmd = str[i];
+            if (cmd >= 'A' && cmd <= 'Z') { i++; }
+            else if (cmd >= 'a' && cmd <= 'z') { i++; }
+            else break;
+            const isRel = cmd >= 'a' && cmd <= 'z';
+            if (isRel) cmd = cmd.toUpperCase();
+            if (cmd === 'Z') { break; }
+            if (cmd === 'M' || cmd === 'L') {
+                while (true) {
+                    const x = readNum(); if (isNaN(x)) break;
+                    const y = readNum(); if (isNaN(y)) break;
+                    curX = isRel ? curX + x : x;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                    if (cmd === 'M') cmd = 'L';
+                }
+            } else if (cmd === 'H') {
+                while (true) {
+                    const x = readNum(); if (isNaN(x)) break;
+                    curX = isRel ? curX + x : x;
+                    addPt();
+                }
+            } else if (cmd === 'V') {
+                while (true) {
+                    const y = readNum(); if (isNaN(y)) break;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                }
+            } else if (cmd === 'C') {
+                while (true) {
+                    const x1 = readNum(); if (isNaN(x1)) break;
+                    const y1 = readNum(); if (isNaN(y1)) break;
+                    const x2 = readNum(); if (isNaN(x2)) break;
+                    const y2 = readNum(); if (isNaN(y2)) break;
+                    const x = readNum(); if (isNaN(x)) break;
+                    const y = readNum(); if (isNaN(y)) break;
+                    curX = isRel ? curX + x : x;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                }
+            } else if (cmd === 'S') {
+                while (true) {
+                    const x2 = readNum(); if (isNaN(x2)) break;
+                    const y2 = readNum(); if (isNaN(y2)) break;
+                    const x = readNum(); if (isNaN(x)) break;
+                    const y = readNum(); if (isNaN(y)) break;
+                    curX = isRel ? curX + x : x;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                }
+            } else if (cmd === 'Q') {
+                while (true) {
+                    const x1 = readNum(); if (isNaN(x1)) break;
+                    const y1 = readNum(); if (isNaN(y1)) break;
+                    const x = readNum(); if (isNaN(x)) break;
+                    const y = readNum(); if (isNaN(y)) break;
+                    curX = isRel ? curX + x : x;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                }
+            } else if (cmd === 'T') {
+                while (true) {
+                    const x = readNum(); if (isNaN(x)) break;
+                    const y = readNum(); if (isNaN(y)) break;
+                    curX = isRel ? curX + x : x;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                }
+            } else { break; }
+        }
+        return pts;
+    }
+
     function distToSegment(px, py, x1, y1, x2, y2) {
         const dx = x2 - x1, dy = y2 - y1;
         const lenSq = dx * dx + dy * dy;
@@ -209,24 +429,33 @@
 
     function rebuildRegionPreview() {
         if (regionPolygon) map.removeLayer(regionPolygon);
-        if (regionVerts.length < 3) { regionPolygon = null; return; }
-        const coords = regionVerts.map(p => [p.y, p.x]);
+        regionPolygon = null;
+        rebuildSubPolygons();
+        const verts = getActiveVerts();
+        if (verts.length < 3) return;
+        const coords = verts.map(p => [p.y, p.x]);
         coords.push(coords[0]);
+        const info = getActivePathInfo();
+        const color = info.type === 'lake' ? '#4488ff' : '#e94560';
         regionPolygon = L.polygon(coords, {
-            color: '#e94560', weight: 3, fillColor: '#e94560', fillOpacity: 0.15
+            color: color, weight: 3, fillOpacity: info.type === 'lake' ? 0 : 0,
+            interactive: true
         }).addTo(map);
         regionPolygon.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
-            const n = regionVerts.length;
+            const n = verts.length;
             let best = -1, bestDist = Infinity;
             for (let i = 0; i < n; i++) {
                 const j = (i + 1) % n;
                 const d = distToSegment(e.latlng.lng, e.latlng.lat,
-                    regionVerts[i].x, regionVerts[i].y,
-                    regionVerts[j].x, regionVerts[j].y);
+                    verts[i].x, verts[i].y,
+                    verts[j].x, verts[j].y);
                 if (d < bestDist) { bestDist = d; best = i; }
             }
-            regionVerts.splice(best + 1, 0, { x: e.latlng.lng, y: e.latlng.lat });
+            regionPushHistory();
+            const current = getActiveVerts();
+            current.splice(best + 1, 0, { x: e.latlng.lng, y: e.latlng.lat });
+            setActiveVerts(current);
             rebuildVertexMarkers();
             rebuildRegionPreview();
             updateRegionUI();
@@ -236,21 +465,25 @@
     let _previewLine = null;
     let _selectMode = false;
     let _selectedVerts = new Set();
+    let _regionUndoStack = [];
+    const REGION_UNDO_MAX = 50;
+
+    function regionPushHistory() {
+        const verts = getActiveVerts();
+        _regionUndoStack.push({ verts: verts.map(v => ({ x: v.x, y: v.y })), subIdx: _activeSubIdx });
+        if (_regionUndoStack.length > REGION_UNDO_MAX) _regionUndoStack.shift();
+    }
 
     function updatePreviewLine(ll) {
         if (_previewLine) { map.removeLayer(_previewLine); _previewLine = null; }
-        if (regionVerts.length === 0 || !ll) return;
-        const last = regionVerts[regionVerts.length - 1];
-        _previewLine = L.polyline([[last.y, last.x], [ll.lat, ll.lng]], {
-            color: '#e94560', weight: 2, dashArray: '6,8', opacity: 0.6
-        }).addTo(map);
     }
 
     function rebuildVertexMarkers() {
         vertexMarkers.forEach(m => map.removeLayer(m));
         vertexMarkers = [];
-        regionVerts.forEach((p, i) => {
-            const isLast = i === regionVerts.length - 1;
+        const verts = getActiveVerts();
+        verts.forEach((p, i) => {
+            const isLast = i === verts.length - 1;
             const isSel = _selectedVerts.has(i);
             const bg = isSel ? '#4488ff' : isLast ? '#ffdd44' : '#fff';
             const border = isSel ? '#2244cc' : '#e94560';
@@ -259,32 +492,53 @@
             const marker = L.marker([p.y, p.x], {
                 icon: L.divIcon({
                     className: 'region-vertex',
-                    html: `<div style="width:22px;height:22px;background:${bg};border-radius:50%;border:${borderW}px solid ${border};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${txtColor}">${i+1}</div>`,
-                    iconSize: [22, 22], iconAnchor: [11, 11]
+                    html: `<div style="width:16px;height:16px;background:${bg};border-radius:50%;border:${borderW}px solid ${border};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:${txtColor}">${i+1}</div>`,
+                    iconSize: [16, 16], iconAnchor: [8, 8]
                 }),
                 draggable: !_selectMode
             });
             marker._vertIndex = i;
+            marker._dragActive = false;
+            marker._pathIdx = _activeSubIdx;
+            marker.on('dragstart', () => { marker._dragActive = true; });
             marker.on('drag', (e) => {
                 const pos = e.target.getLatLng();
-                regionVerts[i] = { x: pos.lng, y: pos.lat };
+                const current = getActiveVerts();
+                current[i] = { x: pos.lng, y: pos.lat };
+                setActiveVerts(current);
                 rebuildRegionPreview();
             });
-            marker.on('dragend', () => updatePreviewLine(null));
+            marker.on('dragend', () => {
+                setTimeout(() => { marker._dragActive = false; }, 200);
+                updatePreviewLine(null);
+            });
             marker.on('click', (e) => {
+                if (marker._dragActive) return;
                 if (e.originalEvent) e.originalEvent.stopPropagation();
                 if (_selectMode) {
                     if (_selectedVerts.has(i)) _selectedVerts.delete(i);
                     else _selectedVerts.add(i);
                     rebuildVertexMarkers();
                     updateSelectUI();
+                } else {
+                    regionPushHistory();
+                    const current = getActiveVerts();
+                    current.splice(i + 1, 0, { x: current[i].x, y: current[i].y });
+                    setActiveVerts(current);
+                    rebuildVertexMarkers();
+                    rebuildRegionPreview();
+                    updateRegionUI();
                 }
             });
             marker.on('mousedown', (e) => { if (e.originalEvent) e.originalEvent.stopPropagation(); });
             marker.on('dblclick', () => {
+                if (marker._dragActive) return;
                 if (_selectMode) return;
-                if (regionVerts.length <= 3) return;
-                regionVerts.splice(i, 1);
+                const current = getActiveVerts();
+                if (current.length <= 3) return;
+                regionPushHistory();
+                current.splice(i, 1);
+                setActiveVerts(current);
                 rebuildVertexMarkers();
                 rebuildRegionPreview();
                 updateRegionUI();
@@ -296,27 +550,52 @@
     }
 
     function updateRegionUI() {
-        document.getElementById('rb-undo').style.display = regionVerts.length > 0 ? 'inline-block' : 'none';
-        document.getElementById('rb-clear').style.display = regionVerts.length > 0 ? 'inline-block' : 'none';
-        document.getElementById('rb-save').style.display = regionVerts.length >= 3 ? 'inline-block' : 'none';
-        document.getElementById('rb-select').style.display = regionVerts.length > 0 ? 'inline-block' : 'none';
-        document.getElementById('rb-status').textContent =
-            regionVerts.length === 0 ? 'Haz clic en el mapa para añadir vértices' :
-            regionVerts.length < 3 ? `${regionVerts.length} vértices — necesitas al menos 3` :
-            `${regionVerts.length} vértices`;
+        const activeLen = getActiveVerts().length;
+        const mainLen = regionVerts.length;
+        document.getElementById('rb-undo').style.display = _regionUndoStack.length > 0 ? 'inline-block' : 'none';
+        document.getElementById('rb-clear').style.display = activeLen > 0 ? 'inline-block' : 'none';
+        document.getElementById('rb-save').style.display = mainLen >= 3 ? 'inline-block' : 'none';
+        document.getElementById('rb-select').style.display = mainLen > 0 ? 'inline-block' : 'none';
+        document.getElementById('rb-add-island').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
+        document.getElementById('rb-add-lake').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
+        const info = getActivePathInfo();
+        if (_activeSubIdx >= 0) {
+            document.getElementById('rb-status').textContent = `${info.label}: ${activeLen} vértices · [M]ain para volver`;
+        } else if (mainLen === 0) {
+            document.getElementById('rb-status').textContent = 'Haz clic en el mapa para añadir vértices';
+        } else if (mainLen < 3) {
+            document.getElementById('rb-status').textContent = `${mainLen} vértices — necesitas al menos 3`;
+        } else {
+            const subCount = _subPaths.length;
+            const extra = subCount > 0 ? ` · ${subCount} sub‑path(s)` : '';
+            document.getElementById('rb-status').textContent = `${mainLen} vértices${extra}`;
+        }
     }
 
     function loadRegionVerts(region) {
         if (_selectMode) { _selectMode = false; _selectedVerts.clear(); document.getElementById('rb-select').textContent = '🟦 Seleccionar'; document.getElementById('rb-delete-selected').style.display = 'none'; }
+        _regionUndoStack = [];
+        _subPaths = [];
+        _activeSubIdx = -1;
+        _subPolygons.forEach(p => map.removeLayer(p));
+        _subPolygons = [];
         regionVerts = parseRegionPath(region);
         editingRegionName = region.name;
+        if (region.extraPaths) {
+            _subPaths = region.extraPaths.map(ep => ({
+                verts: parseSubPathVerts(ep.d, ep.transform),
+                type: ep.type
+            }));
+        }
         updatePreviewLine(null);
         rebuildVertexMarkers();
         rebuildRegionPreview();
         updateRegionUI();
+        updatePathNav();
+        const total = regionVerts.length + _subPaths.reduce((s, sp) => s + sp.verts.length, 0);
         document.getElementById('rb-status').textContent =
-            `Editando "${region.name}" — ${regionVerts.length} vértices` +
-            (regionVerts.length >= 3 ? ' (puedes arrastrar y añadir)' : '');
+            `Editando "${region.name}" — ${total} vértices` +
+            (regionVerts.length >= 3 ? ' (arrastra, doble clic para borrar)' : '');
         if (regionVerts.length > 0) {
             const latlngs = regionVerts.map(p => [p.y, p.x]);
             const bounds = L.latLngBounds(latlngs);
@@ -332,12 +611,19 @@
         if (now - _rbLastClick < 400) return;
         _rbLastClick = now;
         const c = getImageCoords(e.containerPoint);
-        regionVerts.push(c);
+        regionPushHistory();
+        const verts = getActiveVerts();
+        verts.push(c);
+        setActiveVerts(verts);
         rebuildVertexMarkers();
         rebuildRegionPreview();
         updateRegionUI();
-        if (!editingRegionName && regionVerts.length === 3)
+        const info = getActivePathInfo();
+        const len = getActiveVerts().length;
+        if (!editingRegionName && _activeSubIdx < 0 && len === 3)
             document.getElementById('rb-status').textContent = '3 vértices — puedes guardar o seguir añadiendo';
+        else
+            document.getElementById('rb-status').textContent = `${info.label}: ${len} vértices`;
         updatePreviewLine(null);
     }
 
@@ -348,8 +634,11 @@
     }
 
     function regionUndo() {
-        if (regionVerts.length === 0) return;
-        regionVerts.pop();
+        if (_regionUndoStack.length === 0) return;
+        const entry = _regionUndoStack.pop();
+        if (entry.subIdx !== _activeSubIdx) { _regionUndoStack = []; return; }
+        const verts = entry.verts.map(v => ({ x: v.x, y: v.y }));
+        setActiveVerts(verts);
         rebuildVertexMarkers();
         rebuildRegionPreview();
         updateRegionUI();
@@ -357,7 +646,12 @@
     }
 
     function regionClear() {
-        if (regionVerts.length === 0) return;
+        if (regionVerts.length === 0 && _subPaths.length === 0) return;
+        _regionUndoStack = [];
+        _subPaths = [];
+        _activeSubIdx = -1;
+        _subPolygons.forEach(p => map.removeLayer(p));
+        _subPolygons = [];
         regionVerts = [];
         editingRegionName = '';
         document.getElementById('rb-region-select').value = '';
@@ -374,7 +668,21 @@
             document.getElementById('rb-delete-selected').style.display = 'none';
         }
         updateRegionUI();
+        updatePathNav();
         document.getElementById('rb-status').textContent = 'Haz clic en el mapa para añadir vértices';
+    }
+
+    function vertsToSvgPath(verts) {
+        const svgPts = verts.map(p => ({
+            x: Math.round(p.x * 100) / 100,
+            y: Math.round((IMG_H - p.y) * 100) / 100
+        }));
+        let minX = Infinity, minY = Infinity;
+        svgPts.forEach(p => { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; });
+        const parts = svgPts.map(p => `L${(p.x - minX).toFixed(2)} ${(p.y - minY).toFixed(2)}`);
+        parts[0] = 'M' + parts[0].slice(1);
+        parts.push('Z');
+        return { d: parts.join(''), transform: `translate(${minX.toFixed(2)}, ${minY.toFixed(2)})` };
     }
 
     function regionSave() {
@@ -385,32 +693,29 @@
         if (!isEdit && (!name || !name.trim())) return;
         const nameTrim = isEdit ? editingRegionName : name.trim();
 
-        const svgPts = regionVerts.map(p => ({
-            x: Math.round(p.x * 100) / 100,
-            y: Math.round((IMG_H - p.y) * 100) / 100
-        }));
-        let minSvgX = Infinity, minSvgY = Infinity;
-        svgPts.forEach(p => { if (p.x < minSvgX) minSvgX = p.x; if (p.y < minSvgY) minSvgY = p.y; });
-
-        const pathParts = svgPts.map(p => `L${(p.x - minSvgX).toFixed(2)} ${(p.y - minSvgY).toFixed(2)}`);
-        pathParts[0] = 'M' + pathParts[0].slice(1);
-        pathParts.push('Z');
+        const main = vertsToSvgPath(regionVerts);
+        const extraPaths = _subPaths.filter(sp => sp.verts.length >= 3).map(sp => {
+            const spData = vertsToSvgPath(sp.verts);
+            return { d: spData.d, transform: spData.transform, type: sp.type };
+        });
 
         if (isEdit) {
             const idx = data.regions.findIndex(r => r.name === editingRegionName);
             if (idx !== -1) {
-                data.regions[idx].path = pathParts.join('');
-                data.regions[idx].transform = `translate(${minSvgX.toFixed(2)}, ${minSvgY.toFixed(2)})`;
+                data.regions[idx].path = main.d;
+                data.regions[idx].transform = main.transform;
+                data.regions[idx].extraPaths = extraPaths.length > 0 ? extraPaths : undefined;
                 alert(`Frontera de "${editingRegionName}" actualizada ✅`);
                 rebuildSvgOverlay();
             }
             toggleRegionEditMode();
         } else {
             data.regions.push({
-                name: nameTrim, path: pathParts.join(''),
-                color: '#e94560', transform: `translate(${minSvgX.toFixed(2)}, ${minSvgY.toFixed(2)})`, description: ''
+                name: nameTrim, path: main.d,
+                color: '#e94560', transform: main.transform, description: '',
+                extraPaths: extraPaths.length > 0 ? extraPaths : undefined
             });
-            if (confirm(`Región "${nameTrim}" creada ✅\n\n¿Recargar para verla en el mapa?`)) location.reload();
+            rebuildSvgOverlay();
             toggleRegionEditMode();
         }
     }
@@ -445,10 +750,13 @@
 
     function deleteSelected() {
         if (_selectedVerts.size === 0) return;
+        regionPushHistory();
+        const current = getActiveVerts();
         const sorted = [..._selectedVerts].sort((a, b) => b - a);
-        for (const idx of sorted) regionVerts.splice(idx, 1);
+        for (const idx of sorted) current.splice(idx, 1);
+        setActiveVerts(current);
         _selectedVerts.clear();
-        if (regionVerts.length < 3) { regionClear(); return; }
+        if (current.length < 3) { regionClear(); return; }
         rebuildVertexMarkers();
         rebuildRegionPreview();
         updateRegionUI();
@@ -475,41 +783,9 @@
             svg.appendChild(defs);
 
             data.regions.forEach(region => {
-                const path = document.createElementNS(svgNS, 'path');
-                path.setAttribute('d', region.path);
-                if (region.transform) path.setAttribute('transform', region.transform);
-                path.setAttribute('data-region', region.name);
-                path.setAttribute('fill', 'transparent');
-                path.setAttribute('stroke', 'none');
-                path.setAttribute('stroke-width', '0');
-                path.setAttribute('stroke-linecap', 'round');
-                path.setAttribute('stroke-linejoin', 'round');
-                path.style.pointerEvents = 'auto';
-                path.style.cursor = 'pointer';
-                path.style.transition = 'all 0.2s ease';
-
-                path.addEventListener('mouseenter', () => {
-                    if (!hoverEnabled) return;
-                    path.setAttribute('stroke', region.color || '#e94560');
-                    path.setAttribute('stroke-width', '4');
-                    path.setAttribute('fill', (region.color || '#e94560') + '60');
-                    path.setAttribute('filter', 'url(#region-glow)');
-                });
-                path.addEventListener('mouseleave', () => {
-                    if (!hoverEnabled) return;
-                    if (activeRegion !== region.name) {
-                        path.setAttribute('fill', 'transparent');
-                        path.setAttribute('stroke', 'none');
-                        path.setAttribute('stroke-width', '0');
-                        path.removeAttribute('filter');
-                    }
-                });
-                path.addEventListener('click', (e) => {
-                    if (!clickEnabled) return;
-                    e.stopPropagation();
-                    openRegionPanel(region);
-                });
-                svg.appendChild(path);
+                const g = createRegionSvg(svgNS, region);
+                if (g._defs) g._defs.forEach(d => defs.appendChild(d));
+                svg.appendChild(g);
             });
 
             svgOverlayRef = L.svgOverlay(svg, data.bounds, { interactive: false });
@@ -519,18 +795,20 @@
 
     function setRegionVisibility(visible) {
         data.regions.forEach(r => {
-            const p = document.querySelector(`[data-region="${r.name}"]`);
-            if (!p) return;
+            const g = document.querySelector(`g[data-region="${r.name}"]`);
+            if (!g) return;
             if (visible) {
-                p.setAttribute('stroke', (r.color || '#e94560') + '80');
-                p.setAttribute('stroke-width', '2');
-                p.setAttribute('fill', 'transparent');
-                p.removeAttribute('filter');
+                g.style.display = 'none';
             } else {
-                p.setAttribute('fill', 'transparent');
-                p.setAttribute('stroke', 'none');
-                p.setAttribute('stroke-width', '0');
-                p.removeAttribute('filter');
+                g.style.display = '';
+                g.querySelectorAll('path').forEach(p => {
+                    if (p.getAttribute('fill') === 'none') return;
+                    const c = r.color || '#e94560';
+                    p.setAttribute('fill', hexAlpha(c, 0.1));
+                    p.setAttribute('stroke', BOUNDARY_STROKE);
+                    p.setAttribute('stroke-width', BOUNDARY_WIDTH);
+                    p.removeAttribute('filter');
+                });
             }
         });
     }
@@ -549,6 +827,14 @@
                 sel.appendChild(opt);
             });
 
+            document.getElementById('rb-add-island').style.display = 'none';
+            document.getElementById('rb-add-lake').style.display = 'none';
+            document.getElementById('rb-main').style.display = 'none';
+            _subPaths = [];
+            _activeSubIdx = -1;
+            _subPolygons.forEach(p => map.removeLayer(p));
+            _subPolygons = [];
+            regionClear();
             hoverEnabled = false;
             setRegionVisibility(true);
             setClickState(false);
@@ -563,6 +849,14 @@
         } else {
             bar.style.display = 'none';
             document.getElementById('rb-region-select').innerHTML = '<option value="">— Nueva región —</option>';
+            document.getElementById('rb-add-island').style.display = 'none';
+            document.getElementById('rb-add-lake').style.display = 'none';
+            document.getElementById('rb-main').style.display = 'none';
+            document.getElementById('rb-path-nav').style.display = 'none';
+            _subPaths = [];
+            _activeSubIdx = -1;
+            _subPolygons.forEach(p => map.removeLayer(p));
+            _subPolygons = [];
             regionVerts = [];
             editingRegionName = '';
             rebuildVertexMarkers();
@@ -591,6 +885,36 @@
         }
     }
 
+    function startSubPath(type) {
+        if (_activeSubIdx >= 0) return;
+        if (_selectMode) toggleSelectMode();
+        _subPaths.push({ verts: [], type: type });
+        _activeSubIdx = _subPaths.length - 1;
+        _regionUndoStack = [];
+        document.getElementById('rb-add-island').style.display = 'none';
+        document.getElementById('rb-add-lake').style.display = 'none';
+        document.getElementById('rb-main').style.display = 'inline-block';
+        rebuildVertexMarkers();
+        rebuildRegionPreview();
+        updateRegionUI();
+        updatePathNav();
+    }
+
+    function switchToMainPath() {
+        if (_activeSubIdx < 0) return;
+        if (_selectMode) toggleSelectMode();
+        _activeSubIdx = -1;
+        _regionUndoStack = [];
+        const mainOk = regionVerts.length >= 3;
+        document.getElementById('rb-add-island').style.display = mainOk ? 'inline-block' : 'none';
+        document.getElementById('rb-add-lake').style.display = mainOk ? 'inline-block' : 'none';
+        document.getElementById('rb-main').style.display = 'none';
+        rebuildVertexMarkers();
+        rebuildRegionPreview();
+        updateRegionUI();
+        updatePathNav();
+    }
+
     document.getElementById('btn-region-edit').addEventListener('click', toggleRegionEditMode);
     document.getElementById('rb-region-select').addEventListener('change', function () {
         if (!regionEditMode) return;
@@ -604,6 +928,363 @@
     document.getElementById('rb-save').addEventListener('click', regionSave);
     document.getElementById('rb-select').addEventListener('click', toggleSelectMode);
     document.getElementById('rb-delete-selected').addEventListener('click', deleteSelected);
+    document.getElementById('rb-add-island').addEventListener('click', () => startSubPath('island'));
+    document.getElementById('rb-add-lake').addEventListener('click', () => startSubPath('lake'));
+    document.getElementById('rb-main').addEventListener('click', switchToMainPath);
+
+    // ─── SISTEMA DE PINTURA ───
+    let paintSystemReady = false;
+    let paintMode = false;
+    let paintTool = 'brush';
+    let paintColor = '#e94560';
+    let paintSize = 8;
+    let isPainting = false;
+    let paintPoints = [];
+    let paintImagePoints = [];
+    let paintBlobUrl = null;
+    let paintGen = 0;
+
+    let offscreenCanvas = null;
+    let offscreenCtx = null;
+    let paintOverlay = null;
+    let tempCanvas = null;
+    let tempCtx = null;
+    function initPaintSystem() {
+        if (!data.paint) data.paint = [];
+
+        offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = 4096;
+        offscreenCanvas.height = 2389;
+        offscreenCtx = offscreenCanvas.getContext('2d');
+
+        if (data.paint.length > 0) replayPaintStrokes(data.paint);
+
+        paintOverlay = L.imageOverlay(offscreenCanvas.toDataURL('image/png'), data.bounds, {
+            opacity: 1, interactive: false
+        }).addTo(map);
+
+        const container = map.getContainer();
+        tempCanvas = document.createElement('canvas');
+        tempCanvas.style.position = 'absolute';
+        tempCanvas.style.top = '0';
+        tempCanvas.style.left = '0';
+        tempCanvas.style.width = '100%';
+        tempCanvas.style.height = '100%';
+        tempCanvas.style.pointerEvents = 'none';
+        tempCanvas.style.display = 'none';
+        tempCanvas.style.zIndex = '10000';
+        tempCanvas.style.touchAction = 'none';
+        tempCanvas.style.imageRendering = 'pixelated';
+        tempCanvas.width = container.offsetWidth;
+        tempCanvas.height = container.offsetHeight;
+        tempCtx = tempCanvas.getContext('2d');
+        container.appendChild(tempCanvas);
+
+        map.on('resize', () => {
+            tempCanvas.width = container.offsetWidth;
+            tempCanvas.height = container.offsetHeight;
+        });
+
+        initPaintUI();
+        paintSystemReady = true;
+    }
+
+    function enterPaintMode() {
+        if (!paintSystemReady) initPaintSystem();
+        if (regionEditMode) toggleRegionEditMode();
+        paintMode = true;
+
+        tempCanvas.style.display = 'block';
+        tempCanvas.style.pointerEvents = 'auto';
+        tempCanvas.style.cursor = 'crosshair';
+
+        map.dragging.disable();
+        map.touchZoom.disable();
+        map.doubleClickZoom.disable();
+        map.boxZoom.disable();
+        map.keyboard.disable();
+
+        document.getElementById('paint-bar').style.display = 'flex';
+        map.invalidateSize();
+        updatePaintToolUI();
+        setupPaintListeners(true);
+    }
+
+    function exitPaintMode() {
+        if (!paintMode) return;
+        paintMode = false;
+        isPainting = false;
+
+        tempCanvas.style.display = 'none';
+        tempCanvas.style.pointerEvents = 'none';
+        clearTempCanvas();
+
+        map.dragging.enable();
+        map.touchZoom.enable();
+        map.doubleClickZoom.enable();
+        map.boxZoom.enable();
+        map.keyboard.enable();
+
+        document.getElementById('paint-bar').style.display = 'none';
+        map.invalidateSize();
+        setupPaintListeners(false);
+    }
+
+    function setupPaintListeners(attach) {
+        const method = attach ? 'addEventListener' : 'removeEventListener';
+        tempCanvas[method]('mousedown', onPaintMouseDown);
+        document[method]('mousemove', onPaintMouseMove);
+        document[method]('mouseup', onPaintMouseUp);
+    }
+
+    function updatePaintToolUI() {
+        document.querySelectorAll('#paint-bar .paint-tools .btn-sm').forEach(b => b.classList.remove('btn-primary'));
+        const btn = document.getElementById('paint-tool-' + paintTool);
+        if (btn) btn.classList.add('btn-primary');
+        document.getElementById('paint-size-val').textContent = paintSize;
+    }
+
+    function getScreenPos(e) {
+        const rect = map.getContainer().getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    function screenToImage(sx, sy) {
+        const ll = map.containerPointToLatLng([sx, sy]);
+        return { x: ll.lng, y: 2389 - ll.lat };
+    }
+
+    function getScreenBrushSize() {
+        return paintSize * Math.pow(2, map.getZoom());
+    }
+
+    function getRegionAtPoint(imageX, imageY) {
+        for (const r of data.regions) {
+            const m = r.transform.match(/translate\(([\d.-]+),\s*([\d.-]+)\)/);
+            const tx = m ? parseFloat(m[1]) : 0;
+            const ty = m ? parseFloat(m[2]) : 0;
+            const localX = imageX - tx;
+            const localY = imageY - ty;
+            try {
+                const path = new Path2D(r.path);
+                const c = document.createElement('canvas').getContext('2d');
+                if (c.isPointInPath(path, localX, localY)) return r;
+            } catch (e) {}
+        }
+        return null;
+    }
+
+    function onPaintMouseDown(e) {
+        if (!paintMode || e.button !== 0) return;
+        const sp = getScreenPos(e);
+
+        if (paintTool === 'fill') {
+            const ip = screenToImage(sp.x, sp.y);
+            const region = getRegionAtPoint(ip.x, ip.y);
+            if (region) {
+                const m = region.transform.match(/translate\(([\d.-]+),\s*([\d.-]+)\)/);
+                const tx = m ? parseFloat(m[1]) : 0;
+                const ty = m ? parseFloat(m[2]) : 0;
+                const path = new Path2D(region.path);
+                offscreenCtx.save();
+                offscreenCtx.translate(tx, ty);
+                offscreenCtx.fillStyle = paintColor;
+                offscreenCtx.fill(path);
+                offscreenCtx.restore();
+                updatePaintOverlay();
+                data.paint.push({ tool: 'fill', color: paintColor, region: region.name });
+            }
+            return;
+        }
+
+        if (paintTool === 'pipette') {
+            const ip = screenToImage(sp.x, sp.y);
+            const ix = Math.round(Math.min(Math.max(ip.x, 0), 4095));
+            const iy = Math.round(Math.min(Math.max(ip.y, 0), 2388));
+            const paintPixel = offscreenCtx.getImageData(ix, iy, 1, 1).data;
+            if (paintPixel[3] > 0) {
+                paintColor = '#' + [paintPixel[0], paintPixel[1], paintPixel[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+                document.getElementById('paint-color').value = paintColor;
+            } else {
+                try {
+                    const mapImg = document.querySelector('.leaflet-overlay-pane > img');
+                    if (mapImg && mapImg.complete && mapImg.naturalWidth > 0) {
+                        const c = document.createElement('canvas');
+                        c.width = 4096; c.height = 2389;
+                        const ctx = c.getContext('2d');
+                        ctx.drawImage(mapImg, 0, 0);
+                        const pixel = ctx.getImageData(ix, iy, 1, 1).data;
+                        if (pixel[3] > 0) {
+                            paintColor = '#' + [pixel[0], pixel[1], pixel[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+                            document.getElementById('paint-color').value = paintColor;
+                        }
+                    }
+                } catch (e) {}
+            }
+            return;
+        }
+
+        isPainting = true;
+        const ip = screenToImage(sp.x, sp.y);
+        paintPoints = [{ x: sp.x, y: sp.y }];
+        paintImagePoints = [{ x: ip.x, y: ip.y }];
+
+        tempCtx.lineCap = 'round';
+        tempCtx.lineJoin = 'round';
+        tempCtx.beginPath();
+        tempCtx.arc(sp.x, sp.y, getScreenBrushSize() / 2, 0, Math.PI * 2);
+        if (paintTool === 'eraser') {
+            tempCtx.globalCompositeOperation = 'destination-out';
+            tempCtx.fillStyle = 'rgba(0,0,0,1)';
+        } else {
+            tempCtx.fillStyle = paintColor;
+        }
+        tempCtx.fill();
+        tempCtx.globalCompositeOperation = 'source-over';
+    }
+
+    function onPaintMouseMove(e) {
+        if (!paintMode || !isPainting) return;
+        const sp = getScreenPos(e);
+        const prev = paintPoints[paintPoints.length - 1];
+        const ip = screenToImage(sp.x, sp.y);
+
+        const sSize = getScreenBrushSize();
+        tempCtx.lineCap = 'round';
+        tempCtx.lineJoin = 'round';
+        tempCtx.lineWidth = sSize;
+        if (paintTool === 'eraser') {
+            tempCtx.globalCompositeOperation = 'destination-out';
+            tempCtx.strokeStyle = 'rgba(0,0,0,1)';
+        } else {
+            tempCtx.strokeStyle = paintColor;
+        }
+        tempCtx.beginPath();
+        tempCtx.moveTo(prev.x, prev.y);
+        tempCtx.lineTo(sp.x, sp.y);
+        tempCtx.stroke();
+        tempCtx.globalCompositeOperation = 'source-over';
+
+        paintPoints.push({ x: sp.x, y: sp.y });
+        paintImagePoints.push({ x: ip.x, y: ip.y });
+    }
+
+    function onPaintMouseUp() {
+        if (!paintMode || !isPainting) return;
+        isPainting = false;
+
+        if (paintImagePoints.length > 0) {
+            offscreenCtx.lineCap = 'round';
+            offscreenCtx.lineJoin = 'round';
+            offscreenCtx.lineWidth = paintSize;
+            if (paintTool === 'eraser') {
+                offscreenCtx.globalCompositeOperation = 'destination-out';
+                offscreenCtx.strokeStyle = 'rgba(0,0,0,1)';
+            } else {
+                offscreenCtx.strokeStyle = paintColor;
+            }
+            offscreenCtx.beginPath();
+            offscreenCtx.moveTo(paintImagePoints[0].x, paintImagePoints[0].y);
+            for (let i = 1; i < paintImagePoints.length; i++) {
+                offscreenCtx.lineTo(paintImagePoints[i].x, paintImagePoints[i].y);
+            }
+            offscreenCtx.stroke();
+            offscreenCtx.globalCompositeOperation = 'source-over';
+
+            const pts = paintImagePoints.map(p => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100]);
+            data.paint.push({
+                tool: paintTool, color: paintColor, size: paintSize, points: pts
+            });
+
+            updatePaintOverlay();
+        }
+
+        clearTempCanvas();
+        paintPoints = [];
+        paintImagePoints = [];
+    }
+
+    function paintUndo() {
+        if (!data.paint || data.paint.length === 0) return;
+        data.paint.pop();
+        offscreenCtx.globalCompositeOperation = 'source-over';
+        offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+        if (data.paint.length > 0) replayPaintStrokes(data.paint);
+        updatePaintOverlay();
+    }
+
+    function updatePaintOverlay() {
+        const gen = ++paintGen;
+        offscreenCanvas.toBlob(blob => {
+            if (gen !== paintGen) return;
+            if (paintBlobUrl) URL.revokeObjectURL(paintBlobUrl);
+            paintBlobUrl = URL.createObjectURL(blob);
+            paintOverlay.setUrl(paintBlobUrl);
+        }, 'image/png');
+    }
+
+    function clearTempCanvas() {
+        if (!tempCtx || !tempCanvas) return;
+        tempCtx.globalCompositeOperation = 'source-over';
+        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+    }
+
+    function replayPaintStrokes(strokes) {
+        const fillStrokes = strokes.filter(s => s.tool === 'fill');
+        const lineStrokes = strokes.filter(s => s.tool !== 'fill');
+
+        for (const s of lineStrokes) {
+            offscreenCtx.lineCap = 'round';
+            offscreenCtx.lineJoin = 'round';
+            offscreenCtx.lineWidth = s.size || 8;
+            if (s.tool === 'eraser') {
+                offscreenCtx.globalCompositeOperation = 'destination-out';
+                offscreenCtx.strokeStyle = 'rgba(0,0,0,1)';
+            } else {
+                offscreenCtx.strokeStyle = s.color;
+            }
+            offscreenCtx.beginPath();
+            offscreenCtx.moveTo(s.points[0][0], s.points[0][1]);
+            for (let i = 1; i < s.points.length; i++) {
+                offscreenCtx.lineTo(s.points[i][0], s.points[i][1]);
+            }
+            offscreenCtx.stroke();
+            offscreenCtx.globalCompositeOperation = 'source-over';
+        }
+
+        if (fillStrokes.length > 0) {
+            for (const s of fillStrokes) {
+                const region = data.regions.find(r => r.name === s.region);
+                if (!region) continue;
+                const m = region.transform.match(/translate\(([\d.-]+),\s*([\d.-]+)\)/);
+                const tx = m ? parseFloat(m[1]) : 0;
+                const ty = m ? parseFloat(m[2]) : 0;
+                try {
+                    const path = new Path2D(region.path);
+                    offscreenCtx.save();
+                    offscreenCtx.translate(tx, ty);
+                    offscreenCtx.fillStyle = s.color;
+                    offscreenCtx.fill(path);
+                    offscreenCtx.restore();
+                } catch (e) {}
+            }
+        }
+    }
+
+    function initPaintUI() {
+        document.getElementById('paint-tool-brush').addEventListener('click', () => { paintTool = 'brush'; updatePaintToolUI(); });
+        document.getElementById('paint-tool-eraser').addEventListener('click', () => { paintTool = 'eraser'; updatePaintToolUI(); });
+        document.getElementById('paint-tool-fill').addEventListener('click', () => { paintTool = 'fill'; updatePaintToolUI(); });
+        document.getElementById('paint-tool-pipette').addEventListener('click', () => { paintTool = 'pipette'; updatePaintToolUI(); });
+
+        document.getElementById('paint-size').addEventListener('input', (e) => {
+            paintSize = parseInt(e.target.value);
+            document.getElementById('paint-size-val').textContent = paintSize;
+        });
+        document.getElementById('paint-color').addEventListener('input', (e) => { paintColor = e.target.value; });
+        document.getElementById('paint-undo').addEventListener('click', paintUndo);
+        document.getElementById('paint-exit').addEventListener('click', exitPaintMode);
+    }
 
     // ─── TOGGLES ───
     let hoverEnabled = true;
@@ -616,12 +1297,13 @@
         if (!state) {
             data.regions.forEach(r => {
                 if (r.name === activeRegion) return;
-                const p = document.querySelector(`[data-region="${r.name}"]`);
-                if (!p) return;
-                p.setAttribute('fill', 'transparent');
-                p.setAttribute('stroke', 'none');
-                p.setAttribute('stroke-width', '0');
-                p.removeAttribute('filter');
+                document.querySelectorAll(`path[data-region="${r.name}"]`).forEach(p => {
+                    if (p.getAttribute('fill') === 'none') return;
+                    p.setAttribute('fill', hexAlpha(r.color || '#e94560', 0.1));
+                    p.setAttribute('stroke', BOUNDARY_STROKE);
+                    p.setAttribute('stroke-width', BOUNDARY_WIDTH);
+                    p.removeAttribute('filter');
+                });
             });
         }
     }
@@ -669,19 +1351,20 @@
 
         // Reset all regions first
         data.regions.forEach(r => {
-            const p = document.querySelector(`[data-region="${r.name}"]`);
-            if (!p) return;
-            p.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-            p.setAttribute('stroke-width', '2');
-            p.setAttribute('fill', (r.color || '#e94560') + '30');
-            p.removeAttribute('filter');
+            document.querySelectorAll(`path[data-region="${r.name}"]`).forEach(p => {
+                if (p.getAttribute('fill') === 'none') return;
+                p.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+                p.setAttribute('stroke-width', '2');
+                p.setAttribute('fill', hexAlpha(r.color || '#e94560', 0.19));
+                p.removeAttribute('filter');
+            });
         });
         // Highlight selected
-        const sel = document.querySelector(`[data-region="${region.name}"]`);
+        const sel = document.querySelector(`path[data-region="${region.name}"]`);
         if (sel) {
             sel.setAttribute('stroke', region.color || '#e94560');
             sel.setAttribute('stroke-width', '4');
-            sel.setAttribute('fill', (region.color || '#e94560') + '60');
+            sel.setAttribute('fill', hexAlpha(region.color || '#e94560', 0.38));
             sel.setAttribute('filter', 'url(#region-glow)');
         }
     }
@@ -698,28 +1381,31 @@
         region.description = desc;
         region.color = color;
 
-        // Update path visuals
-        const path = document.querySelector(`[data-region="${name}"]`);
-        if (path) {
-            path.setAttribute('stroke', color);
-            path.setAttribute('fill', color + '60');
-            path.setAttribute('stroke-width', '4');
-            path.setAttribute('filter', 'url(#region-glow)');
-        }
+        rebuildSvgOverlay();
 
         document.getElementById('region-panel-desc').textContent = desc;
+
+        // Keep highlight on the edited region
+        const sel = document.querySelector(`path[data-region="${name}"]`);
+        if (sel) {
+            sel.setAttribute('stroke', color);
+            sel.setAttribute('stroke-width', '4');
+            sel.setAttribute('fill', hexAlpha(color, 0.38));
+            sel.setAttribute('filter', 'url(#region-glow)');
+        }
     }
 
     function closeRegionPanel() {
         activeRegion = null;
         document.getElementById('region-panel').className = 'region-panel-closed';
         data.regions.forEach(r => {
-            const path = document.querySelector(`[data-region="${r.name}"]`);
-            if (!path) return;
-            path.setAttribute('fill', 'transparent');
-            path.setAttribute('stroke', 'none');
-            path.setAttribute('stroke-width', '0');
-            path.removeAttribute('filter');
+            document.querySelectorAll(`path[data-region="${r.name}"]`).forEach(p => {
+                if (p.getAttribute('fill') === 'none') return;
+                p.setAttribute('fill', hexAlpha(r.color || '#e94560', 0.1));
+                p.setAttribute('stroke', BOUNDARY_STROKE);
+                p.setAttribute('stroke-width', BOUNDARY_WIDTH);
+                p.removeAttribute('filter');
+            });
         });
     }
 
@@ -1099,6 +1785,8 @@
             btn.classList.add('editing');
             bar.style.display = 'flex';
             exportBtn.style.display = 'inline-block';
+            const bp = document.getElementById('btn-paint');
+            if (bp) bp.style.display = 'inline-block';
             document.getElementById('btn-password').style.display = 'inline-block';
             document.getElementById('btn-sync').style.display = 'inline-block';
 
@@ -1121,9 +1809,12 @@
             btn.classList.remove('editing');
             bar.style.display = 'none';
             exportBtn.style.display = 'none';
+            const bp2 = document.getElementById('btn-paint');
+            if (bp2) bp2.style.display = 'none';
             document.getElementById('btn-password').style.display = 'none';
             document.getElementById('btn-sync').style.display = 'none';
             document.getElementById('sync-status').style.display = 'none';
+            if (paintMode) exitPaintMode();
             cancelPlacing();
             disableDragOnAll();
             closeModal();
@@ -1188,6 +1879,13 @@
     // ─── EVENTOS ───
     document.getElementById('btn-edit').addEventListener('click', toggleEditMode);
     document.getElementById('btn-add').addEventListener('click', startPlacing);
+    const paintBtn = document.getElementById('btn-paint');
+    if (paintBtn) {
+        paintBtn.addEventListener('click', () => {
+            if (paintMode) exitPaintMode();
+            else enterPaintMode();
+        });
+    }
     document.getElementById('btn-password').addEventListener('click', () => {
         const old = prompt('Contraseña actual:');
         if (old !== data.editPassword) { alert('Incorrecta'); return; }
@@ -1226,6 +1924,10 @@
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') { closeModal(); cancelPlacing(); if (regionEditMode) toggleRegionEditMode(); }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+            if (paintMode) { e.preventDefault(); paintUndo(); }
+            else if (regionEditMode) { e.preventDefault(); regionUndo(); }
+        }
     });
 
     window.addEventListener('resize', () => map.invalidateSize());

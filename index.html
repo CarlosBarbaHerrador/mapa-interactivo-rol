@@ -26,10 +26,27 @@
     <div id="edit-bar" style="display:none">
         <span>✏️ <strong>Modo edición</strong></span>
         <button id="btn-add" class="btn btn-primary btn-sm">➕ Nueva ubicación</button>
+        <button id="btn-paint" class="btn btn-secondary btn-sm" style="display:none">🎨 Pintar</button>
         <button id="btn-sync" class="btn btn-secondary btn-sm" style="display:none">☁️ Sincronizar</button>
         <span id="sync-status" style="display:none;font-size:0.75rem;color:#7a9aba"></span>
         <button id="btn-password" class="btn btn-secondary btn-sm" style="display:none">🔑 Contraseña</button>
         <span class="edit-hint">arrastra para mover</span>
+    </div>
+
+    <div id="paint-bar" style="display:none">
+        <span>🎨 <strong>Pintar</strong></span>
+        <div class="paint-tools">
+            <button id="paint-tool-brush" class="btn-sm btn-primary" title="Pincel">🖌️</button>
+            <button id="paint-tool-eraser" class="btn-sm" title="Borrador">🧹</button>
+            <button id="paint-tool-fill" class="btn-sm" title="Cubo de pintura">🪣</button>
+            <button id="paint-tool-pipette" class="btn-sm" title="Pipeta">💉</button>
+        </div>
+        <label class="paint-size-label" title="Tamaño del pincel">📏 <span id="paint-size-val">8</span></label>
+        <input type="range" id="paint-size" min="1" max="80" value="8">
+        <input type="color" id="paint-color" value="#e94560">
+        <span class="edit-hint">clic+pintar · rueda zoom</span>
+        <button id="paint-undo" class="btn-sm" title="Deshacer (Ctrl+Z)">↩️</button>
+        <button id="paint-exit" class="btn-sm" style="background:#6b1a1a;color:#ffb0b0">✖ Salir</button>
     </div>
 
     <div id="region-bar" style="display:none">
@@ -38,11 +55,15 @@
             <option value="">— Nueva región —</option>
         </select>
         <span id="rb-status" style="color:#7a9aba;font-size:0.8rem">Haz clic en el mapa para añadir vértices</span>
+        <span id="rb-path-nav" style="display:none"></span>
         <button id="rb-undo" class="btn-sm" style="display:none">↩️</button>
         <button id="rb-select" class="btn-sm" style="display:none">🟦 Seleccionar</button>
         <button id="rb-delete-selected" class="btn-sm" style="display:none;background:#6b1a1a;color:#ffb0b0">🗑️ Borrar (0)</button>
         <button id="rb-clear" class="btn-sm" style="display:none">🗑️ Todo</button>
         <button id="rb-save" class="btn-sm btn-primary" style="display:none">💾 Guardar</button>
+        <button id="rb-add-island" class="btn-sm" style="display:none">🏝️ +Isla</button>
+        <button id="rb-add-lake" class="btn-sm" style="display:none">🏞️ +Lago</button>
+        <button id="rb-main" class="btn-sm" style="display:none">[M] Main</button>
     </div>
 
     <div id="map"></div>

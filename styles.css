@@ -525,6 +525,78 @@ body {
     background: #d63851;
 }
 
+/* ─── PAINT BAR ─── */
+#paint-bar {
+    background: #2c3e50;
+    padding: 6px 20px;
+    font-size: 0.8rem;
+    color: #b0d0f0;
+    flex-shrink: 0;
+    z-index: 999;
+    border-bottom: 1px solid #3a5a7a;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+#paint-bar .paint-tools {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+#paint-bar .paint-tools .btn-sm {
+    font-size: 1rem;
+    padding: 4px 8px;
+    min-width: 32px;
+    text-align: center;
+}
+
+#paint-bar .paint-tools .btn-sm.btn-primary {
+    background: #e94560;
+    color: #fff;
+}
+
+#paint-bar input[type="range"] {
+    width: 70px;
+    accent-color: #e94560;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+#paint-bar input[type="color"] {
+    width: 34px;
+    height: 28px;
+    padding: 1px;
+    border: 2px solid #3a5a7a;
+    border-radius: 6px;
+    cursor: pointer;
+    vertical-align: middle;
+    background: transparent;
+}
+
+#paint-bar input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+#paint-bar input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 4px;
+}
+
+.paint-size-label {
+    font-size: 0.75rem;
+    color: #7a9aba;
+    white-space: nowrap;
+}
+
+#paint-bar .edit-hint {
+    color: #7a9aba;
+    font-size: 0.7rem;
+    margin-left: auto;
+}
+
 /* ─── REGION VERTEX (Leaflet marker) ─── */
 .region-vertex {
     background: none;
@@ -532,6 +604,30 @@ body {
 }
 
 /* ─── RESPONSIVE ─── */
+/* ─── SUB‑PATH NAV PILLS ─── */
+.path-pill {
+    background: #1a3a6a;
+    color: #c0d0f0;
+    border: 1px solid #2a4a7a;
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+    line-height: 1.6;
+    margin: 0 2px;
+}
+.path-pill:hover {
+    border-color: #e94560;
+    color: #fff;
+}
+.path-pill-active {
+    background: #e94560;
+    border-color: #e94560;
+    color: #fff;
+}
+
 @media (max-width: 640px) {
     #header h1 { font-size: 1rem; }
     #stats-bar { font-size: 0.7rem; padding: 5px 14px; gap: 12px; bottom: 10px; }
