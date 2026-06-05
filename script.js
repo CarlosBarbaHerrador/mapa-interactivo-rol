@@ -28,13 +28,17 @@
     const BOUNDARY_WIDTH = '0';
 
     function createRegionSvg(svgNS, region) {
-        const g = document.createElementNS(svgNS, 'g');
-        g.setAttribute('data-region', region.name);
+        const outerG = document.createElementNS(svgNS, 'g');
+        outerG.setAttribute('data-region', region.name);
         const rc = region.color || '#e94560';
         const allPaths = [{ d: region.path, transform: region.transform, type: 'main' }];
         if (region.extraPaths) allPaths.push(...region.extraPaths);
 
+        // ── Land group (masked) ──
+        const landG = document.createElementNS(svgNS, 'g');
+        const landPaths = allPaths.filter(p => p.type !== 'lake');
         const lakes = allPaths.filter(p => p.type === 'lake');
+
         if (lakes.length > 0) {
             const maskId = 'mask-' + region.name.replace(/\s+/g, '_');
             const mask = document.createElementNS(svgNS, 'mask');
@@ -51,35 +55,48 @@
                 lpEl.setAttribute('fill', 'black');
                 mask.appendChild(lpEl);
             });
-            g.setAttribute('mask', 'url(#' + maskId + ')');
-            (g._defs || (g._defs = [])).push(mask);
+            landG.setAttribute('mask', 'url(#' + maskId + ')');
+            (outerG._defs || (outerG._defs = [])).push(mask);
         }
 
-        allPaths.forEach((ap) => {
+        landPaths.forEach(ap => {
             const path = document.createElementNS(svgNS, 'path');
             path.setAttribute('d', ap.d);
             if (ap.transform) path.setAttribute('transform', ap.transform);
             path.setAttribute('data-region', region.name);
-            if (ap.type === 'lake') {
-                path.setAttribute('fill', 'none');
-                path.setAttribute('stroke', 'none');
-                path.style.pointerEvents = 'none';
-            } else {
-                path.setAttribute('fill', hexAlpha(rc, 0.1));
-                path.setAttribute('stroke', BOUNDARY_STROKE);
-                path.setAttribute('stroke-width', BOUNDARY_WIDTH);
-                path.setAttribute('stroke-linecap', 'round');
-                path.setAttribute('stroke-linejoin', 'round');
-                path.style.pointerEvents = 'auto';
-                path.style.cursor = 'pointer';
-                path.style.transition = 'all 0.2s ease';
-            }
-            g.appendChild(path);
+            path.setAttribute('fill', hexAlpha(rc, 0.1));
+            path.setAttribute('stroke', BOUNDARY_STROKE);
+            path.setAttribute('stroke-width', BOUNDARY_WIDTH);
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.style.pointerEvents = 'auto';
+            path.style.cursor = 'pointer';
+            path.style.transition = 'all 0.2s ease';
+            landG.appendChild(path);
         });
+        outerG.appendChild(landG);
 
+        // ── Lake‑edge group (unmasked, visible only on hover) ──
+        const lakeEdgeG = document.createElementNS(svgNS, 'g');
+        lakes.forEach(lp => {
+            const path = document.createElementNS(svgNS, 'path');
+            path.setAttribute('d', lp.d);
+            if (lp.transform) path.setAttribute('transform', lp.transform);
+            path.setAttribute('data-lake-edge', '1');
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', 'transparent');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.style.pointerEvents = 'none';
+            lakeEdgeG.appendChild(path);
+        });
+        outerG.appendChild(lakeEdgeG);
+
+        // ── Highlight ──
         let _gHighlighted = false;
         const highlightGroup = (on) => {
-            g.querySelectorAll('path:not([fill="none"])').forEach(p => {
+            landG.querySelectorAll('path').forEach(p => {
                 if (on) {
                     p.setAttribute('stroke', rc);
                     p.setAttribute('stroke-width', '4');
@@ -92,26 +109,35 @@
                     p.removeAttribute('filter');
                 }
             });
+            lakeEdgeG.querySelectorAll('path').forEach(p => {
+                if (on) {
+                    p.setAttribute('stroke', rc);
+                    p.setAttribute('stroke-width', '2');
+                } else {
+                    p.setAttribute('stroke', 'transparent');
+                    p.setAttribute('stroke-width', '2');
+                }
+            });
         };
 
-        g.addEventListener('mouseover', () => {
+        outerG.addEventListener('mouseover', () => {
             if (!hoverEnabled || _gHighlighted) return;
             _gHighlighted = true;
             highlightGroup(true);
         });
-        g.addEventListener('mouseout', (e) => {
+        outerG.addEventListener('mouseout', (e) => {
             if (!_gHighlighted) return;
-            if (e.relatedTarget && g.contains(e.relatedTarget)) return;
+            if (e.relatedTarget && outerG.contains(e.relatedTarget)) return;
             _gHighlighted = false;
             if (activeRegion !== region.name) highlightGroup(false);
         });
-        g.addEventListener('click', (e) => {
+        outerG.addEventListener('click', (e) => {
             if (!clickEnabled) return;
             e.stopPropagation();
             openRegionPanel(region);
         });
 
-        return g;
+        return outerG;
     }
 
     function initRegions() {
@@ -801,13 +827,16 @@
                 g.style.display = 'none';
             } else {
                 g.style.display = '';
-                g.querySelectorAll('path').forEach(p => {
-                    if (p.getAttribute('fill') === 'none') return;
+                g.querySelectorAll('path:not([data-lake-edge])').forEach(p => {
                     const c = r.color || '#e94560';
                     p.setAttribute('fill', hexAlpha(c, 0.1));
                     p.setAttribute('stroke', BOUNDARY_STROKE);
                     p.setAttribute('stroke-width', BOUNDARY_WIDTH);
                     p.removeAttribute('filter');
+                });
+                g.querySelectorAll('path[data-lake-edge]').forEach(p => {
+                    p.setAttribute('stroke', 'transparent');
+                    p.setAttribute('stroke-width', '2');
                 });
             }
         });
@@ -1297,12 +1326,15 @@
         if (!state) {
             data.regions.forEach(r => {
                 if (r.name === activeRegion) return;
-                document.querySelectorAll(`path[data-region="${r.name}"]`).forEach(p => {
-                    if (p.getAttribute('fill') === 'none') return;
+                document.querySelectorAll(`path[data-region="${r.name}"]:not([data-lake-edge])`).forEach(p => {
                     p.setAttribute('fill', hexAlpha(r.color || '#e94560', 0.1));
                     p.setAttribute('stroke', BOUNDARY_STROKE);
                     p.setAttribute('stroke-width', BOUNDARY_WIDTH);
                     p.removeAttribute('filter');
+                });
+                document.querySelectorAll(`path[data-region="${r.name}"][data-lake-edge]`).forEach(p => {
+                    p.setAttribute('stroke', 'transparent');
+                    p.setAttribute('stroke-width', '2');
                 });
             });
         }
@@ -1351,21 +1383,29 @@
 
         // Reset all regions first
         data.regions.forEach(r => {
-            document.querySelectorAll(`path[data-region="${r.name}"]`).forEach(p => {
-                if (p.getAttribute('fill') === 'none') return;
+            document.querySelectorAll(`path[data-region="${r.name}"]:not([data-lake-edge])`).forEach(p => {
                 p.setAttribute('stroke', 'rgba(255,255,255,0.5)');
                 p.setAttribute('stroke-width', '2');
                 p.setAttribute('fill', hexAlpha(r.color || '#e94560', 0.19));
                 p.removeAttribute('filter');
             });
+            document.querySelectorAll(`path[data-region="${r.name}"][data-lake-edge]`).forEach(p => {
+                p.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+                p.setAttribute('stroke-width', '2');
+            });
         });
         // Highlight selected
-        const sel = document.querySelector(`path[data-region="${region.name}"]`);
+        const sel = document.querySelector(`path[data-region="${region.name}"]:not([data-lake-edge])`);
         if (sel) {
             sel.setAttribute('stroke', region.color || '#e94560');
             sel.setAttribute('stroke-width', '4');
             sel.setAttribute('fill', hexAlpha(region.color || '#e94560', 0.38));
             sel.setAttribute('filter', 'url(#region-glow)');
+        }
+        const selLake = document.querySelector(`path[data-region="${region.name}"][data-lake-edge]`);
+        if (selLake) {
+            selLake.setAttribute('stroke', region.color || '#e94560');
+            selLake.setAttribute('stroke-width', '2');
         }
     }
 
@@ -1386,12 +1426,17 @@
         document.getElementById('region-panel-desc').textContent = desc;
 
         // Keep highlight on the edited region
-        const sel = document.querySelector(`path[data-region="${name}"]`);
+        const sel = document.querySelector(`path[data-region="${name}"]:not([data-lake-edge])`);
         if (sel) {
             sel.setAttribute('stroke', color);
             sel.setAttribute('stroke-width', '4');
             sel.setAttribute('fill', hexAlpha(color, 0.38));
             sel.setAttribute('filter', 'url(#region-glow)');
+        }
+        const selLake = document.querySelector(`path[data-region="${name}"][data-lake-edge]`);
+        if (selLake) {
+            selLake.setAttribute('stroke', color);
+            selLake.setAttribute('stroke-width', '2');
         }
     }
 
@@ -1399,12 +1444,15 @@
         activeRegion = null;
         document.getElementById('region-panel').className = 'region-panel-closed';
         data.regions.forEach(r => {
-            document.querySelectorAll(`path[data-region="${r.name}"]`).forEach(p => {
-                if (p.getAttribute('fill') === 'none') return;
+            document.querySelectorAll(`path[data-region="${r.name}"]:not([data-lake-edge])`).forEach(p => {
                 p.setAttribute('fill', hexAlpha(r.color || '#e94560', 0.1));
                 p.setAttribute('stroke', BOUNDARY_STROKE);
                 p.setAttribute('stroke-width', BOUNDARY_WIDTH);
                 p.removeAttribute('filter');
+            });
+            document.querySelectorAll(`path[data-region="${r.name}"][data-lake-edge]`).forEach(p => {
+                p.setAttribute('stroke', 'transparent');
+                p.setAttribute('stroke-width', '2');
             });
         });
     }
