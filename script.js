@@ -1,6 +1,39 @@
 (function () {
     const data = MAP_DATA;
 
+    // ─── SUPABASE ───
+    const sb = window.sb;
+    const _sbId = 'u' + Math.random().toString(36).slice(2, 7);
+    const _sbColor = ['#e94560','#0f3460','#16c79a','#f5a623','#7c3aed','#ec4899'][
+        Math.floor(Math.random() * 6)
+    ];
+    let sbReady = false;
+
+    async function sbUpsert(table, row, conflict) {
+        if (!sb) return;
+        const { error } = await sb.from(table).upsert(row, { onConflict: conflict, ignoreDuplicates: false });
+        if (error) throw error;
+    }
+
+    async function sbDelete(table, col, val) {
+        if (!sb) return;
+        const { error } = await sb.from(table).delete().eq(col, val);
+        if (error) console.warn('sb delete error:', table, error);
+    }
+
+    async function sbSavePaint() {
+        if (!sb) return;
+        const strokes = data.paint.map(s => {
+            if (s.tool === 'fill') return { tool: 'fill', color: s.color, region: s.region };
+            return { tool: s.tool, color: s.color, size: s.size || 8, points: s.points || [] };
+        });
+        const { error } = await sb.from('paint').upsert(
+            { id: 0, tool: '_state', points: strokes },
+            { onConflict: 'id', ignoreDuplicates: false }
+        );
+        if (error) console.warn('sbSavePaint error:', error);
+    }
+
     function hexAlpha(hex, a) {
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
@@ -176,6 +209,142 @@
     }
 
     initRegions();
+
+    // ─── SUPABASE DATA LOAD ───
+    async function loadFromSupabase() {
+        if (!sb) return;
+        try {
+            const [regRes, poiRes, ptRes] = await Promise.all([
+                sb.from('regions').select('*'),
+                sb.from('pois').select('*').order('id'),
+                sb.from('paint').select('*').order('id')
+            ]);
+
+            if (regRes.data && regRes.data.length > 0) {
+                data.regions = regRes.data.map(r => ({
+                    name: r.name, path: r.path, transform: r.transform,
+                    color: r.color || '#e94560', description: r.description || '',
+                    extraPaths: r.extrapaths && r.extrapaths.length > 0 ? r.extrapaths : undefined
+                }));
+                rebuildSvgOverlay();
+            }
+
+            if (poiRes.data && poiRes.data.length > 0) {
+                data.pois = poiRes.data.map(r => ({
+                    id: String(r.id), name: r.name, type: r.category,
+                    color: r.color || '#e94560', region: r.region || '',
+                    coords: r.coords, description: r.description || '',
+                    links: r.links || []
+                }));
+                // Reload POI markers
+                Object.keys(markers).forEach(k => layerGroup.removeLayer(markers[k].marker));
+                Object.keys(markers).forEach(k => delete markers[k]);
+                data.pois.forEach(poi => addMarkerFromData(poi));
+                updateCounter();
+            }
+
+            if (ptRes.data && ptRes.data.length > 0) {
+                // paint stored as a single row with points containing the full array
+                const stateRow = ptRes.data.find(r => r.tool === '_state');
+                if (stateRow && stateRow.points && Array.isArray(stateRow.points)) {
+                    data.paint = stateRow.points;
+                }
+                if (offscreenCtx) {
+                    offscreenCtx.globalCompositeOperation = 'source-over';
+                    offscreenCtx.clearRect(0, 0, 4096, 2389);
+                    if (data.paint.length > 0) replayPaintStrokes(data.paint);
+                    updatePaintOverlay();
+                }
+            }
+        } catch (e) { console.warn('Supabase load error:', e); }
+        sbReady = true;
+    }
+
+    // ─── SUPABASE REALTIME ───
+    function setupRealtime() {
+        if (!sb) return;
+
+        sb.channel('regions-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'regions' }, () => {
+                if (!sbReady) return;
+                loadFromSupabase();
+            })
+            .subscribe();
+
+        sb.channel('pois-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'pois' }, () => {
+                if (!sbReady) return;
+                loadFromSupabase();
+            })
+            .subscribe();
+
+        sb.channel('paint-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'paint' }, () => {
+                if (!sbReady) return;
+                loadFromSupabase();
+            })
+            .subscribe();
+
+        // ── Cursors ──
+        const cursorLayer = L.layerGroup().addTo(map);
+        const otherCursors = {};
+
+        sb.channel('cursors-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cursors' }, payload => {
+                const row = payload.new;
+                if (!row || row.id === _sbId) return;
+                if (payload.eventType === 'DELETE') {
+                    if (otherCursors[row.id]) {
+                        cursorLayer.removeLayer(otherCursors[row.id]);
+                        delete otherCursors[row.id];
+                    }
+                    return;
+                }
+                const lat = row.y, lng = row.x; // x=lng, y=lat in image coords → swap
+                if (!otherCursors[row.id]) {
+                    const el = L.circleMarker([lat, lng], {
+                        radius: 6, color: row.color || '#e94560', fillOpacity: 0.8, weight: 2,
+                        opacity: 1
+                    });
+                    el.bindTooltip(row.user_name || '?', { permanent: true, direction: 'top', offset: [0, -10] });
+                    otherCursors[row.id] = el;
+                    cursorLayer.addLayer(el);
+                } else {
+                    otherCursors[row.id].setLatLng([lat, lng]);
+                }
+            })
+            .subscribe();
+
+        // Send own cursor
+        let cursorInterval;
+        function startCursorTracking() {
+            let lastSent = 0;
+            const send = (lat, lng) => {
+                const now = Date.now();
+                if (now - lastSent < 80) return;
+                lastSent = now;
+                sbUpsert('cursors', {
+                    id: _sbId, x: lng, y: lat, user_name: _sbId, color: _sbColor, updated_at: new Date().toISOString()
+                }, 'id');
+            };
+            map.on('mousemove', e => send(e.latlng.lat, e.latlng.lng));
+            cursorInterval = setInterval(() => {
+                sb.from('cursors').delete().lt('updated_at', new Date(Date.now() - 5000).toISOString()).then();
+            }, 3000);
+        }
+
+        function stopCursorTracking() {
+            map.off('mousemove');
+            clearInterval(cursorInterval);
+            sb.from('cursors').delete().eq('id', _sbId).then();
+            Object.values(otherCursors).forEach(m => cursorLayer.removeLayer(m));
+            Object.keys(otherCursors).forEach(k => delete otherCursors[k]);
+        }
+
+        // Expose cursor control to toggleEditMode
+        window.__cursorStart = startCursorTracking;
+        window.__cursorStop = stopCursorTracking;
+    }
 
     // ─── EDITOR DE FRONTERAS (crear y modificar regiones) ───
     const IMG_H = data.bounds[1][0];
@@ -711,8 +880,8 @@
         return { d: parts.join(''), transform: `translate(${minX.toFixed(2)}, ${minY.toFixed(2)})` };
     }
 
-    function regionSave() {
-        if (regionVerts.length < 3) return;
+    async function regionSave() {
+        if (regionVerts.length < 3) { alert('Se necesitan al menos 3 vértices'); return; }
 
         const isEdit = !!editingRegionName;
         const name = isEdit ? editingRegionName : prompt('Nombre de la nueva región:');
@@ -731,6 +900,14 @@
                 data.regions[idx].path = main.d;
                 data.regions[idx].transform = main.transform;
                 data.regions[idx].extraPaths = extraPaths.length > 0 ? extraPaths : undefined;
+                try {
+                    await sbUpsert('regions', {
+                        name: editingRegionName, path: main.d, transform: main.transform,
+                        color: data.regions[idx].color || '#e94560',
+                        description: data.regions[idx].description || '',
+                        extrapaths: extraPaths.length > 0 ? JSON.parse(JSON.stringify(extraPaths)) : []
+                    }, 'name');
+                } catch (e) { alert('Error al guardar en Supabase: ' + e.message); }
                 alert(`Frontera de "${editingRegionName}" actualizada ✅`);
                 rebuildSvgOverlay();
             }
@@ -741,6 +918,13 @@
                 color: '#e94560', transform: main.transform, description: '',
                 extraPaths: extraPaths.length > 0 ? extraPaths : undefined
             });
+            try {
+                await sbUpsert('regions', {
+                    name: nameTrim, path: main.d, transform: main.transform,
+                    color: '#e94560', description: '',
+                    extrapaths: extraPaths.length > 0 ? JSON.parse(JSON.stringify(extraPaths)) : []
+                }, 'name');
+            } catch (e) { alert('Error al guardar en Supabase: ' + e.message); }
             rebuildSvgOverlay();
             toggleRegionEditMode();
         }
@@ -1122,6 +1306,7 @@
                 offscreenCtx.restore();
                 updatePaintOverlay();
                 data.paint.push({ tool: 'fill', color: paintColor, region: region.name });
+                sbSavePaint();
             }
             return;
         }
@@ -1224,6 +1409,7 @@
             data.paint.push({
                 tool: paintTool, color: paintColor, size: paintSize, points: pts
             });
+            sbSavePaint();
 
             updatePaintOverlay();
         }
@@ -1236,6 +1422,7 @@
     function paintUndo() {
         if (!data.paint || data.paint.length === 0) return;
         data.paint.pop();
+        sbSavePaint();
         offscreenCtx.globalCompositeOperation = 'source-over';
         offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
         if (data.paint.length > 0) replayPaintStrokes(data.paint);
@@ -1411,9 +1598,9 @@
 
     function saveRegionEdit() {
         const name = document.getElementById('region-edit-save').dataset.regionName;
-        if (!name) return;
+        if (!name) { alert('Error: no hay región seleccionada'); return; }
         const region = data.regions.find(r => r.name === name);
-        if (!region) return;
+        if (!region) { alert('Error: región "' + name + '" no encontrada'); return; }
 
         const desc = document.getElementById('region-edit-desc').value.trim();
         const color = document.getElementById('region-edit-color').value;
@@ -1421,7 +1608,12 @@
         region.description = desc;
         region.color = color;
 
-        rebuildSvgOverlay();
+        sbUpsert('regions', {
+            name, path: region.path, transform: region.transform, color, description: desc,
+            extrapaths: region.extraPaths ? JSON.parse(JSON.stringify(region.extraPaths)) : []
+        }, 'name');
+
+        try { rebuildSvgOverlay(); } catch (e) { console.error('rebuild error:', e); alert('Error al reconstruir el mapa'); return; }
 
         document.getElementById('region-panel-desc').textContent = desc;
 
@@ -1438,6 +1630,7 @@
             selLake.setAttribute('stroke', color);
             selLake.setAttribute('stroke-width', '2');
         }
+        alert('Región guardada ✅');
     }
 
     function closeRegionPanel() {
@@ -1741,6 +1934,13 @@
         entry.poi.coords = coords;
         entry.poi.links = linkUrl ? [{ text: linkText || '🔗 Enlace', url: linkUrl }] : [];
 
+        // Save to Supabase
+        sbUpsert('pois', {
+            id, name, category: type, color, region,
+            coords: coords, description: desc,
+            links: entry.poi.links.length > 0 ? entry.poi.links : []
+        }, 'id');
+
         const cat = data.categories[type];
         entry.marker.setIcon(createIcon(type, color));
         entry.marker.setTooltipContent(name);
@@ -1770,6 +1970,8 @@
         const entry = markers[id];
         if (!entry) return;
         if (!confirm(`¿Eliminar "${entry.poi.name}"?`)) return;
+
+        sbDelete('pois', 'id', id);
 
         layerGroup.removeLayer(entry.marker);
         delete markers[id];
@@ -1829,6 +2031,7 @@
         const exportBtn = document.getElementById('btn-export');
 
         if (editMode) {
+            if (window.__cursorStart) window.__cursorStart();
             btn.textContent = '👁️ Ver';
             btn.classList.add('editing');
             bar.style.display = 'flex';
@@ -1853,6 +2056,7 @@
 
             enableDragOnAll();
         } else {
+            if (window.__cursorStop) window.__cursorStop();
             btn.textContent = '✏️ Editar';
             btn.classList.remove('editing');
             bar.style.display = 'none';
@@ -1987,4 +2191,7 @@
             document.getElementById('edit-coords').value = JSON.stringify([pos.lat, pos.lng]);
         }
     });
+
+    // ─── SUPABASE INIT ───
+    loadFromSupabase().then(() => { setupRealtime(); });
 })();
