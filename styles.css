@@ -475,6 +475,62 @@ body {
     line-height: 1.6;
 }
 
+/* ─── REGION BAR (Editor de fronteras) ─── */
+#region-bar {
+    background: #2c3e50;
+    padding: 6px 20px;
+    font-size: 0.8rem;
+    color: #b0d0f0;
+    flex-shrink: 0;
+    z-index: 999;
+    border-bottom: 1px solid #3a5a7a;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#region-bar select {
+    background: #0a1628;
+    color: #e0e0e0;
+    border: 1px solid #3a5a7a;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+}
+#region-bar select:focus {
+    border-color: #e94560;
+}
+
+#region-bar .btn-sm {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    white-space: nowrap;
+}
+
+#region-bar .btn-primary {
+    background: #e94560;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 4px 10px;
+}
+#region-bar .btn-primary:hover {
+    background: #d63851;
+}
+
+/* ─── REGION VERTEX (Leaflet marker) ─── */
+.region-vertex {
+    background: none;
+    border: none;
+}
+
 /* ─── RESPONSIVE ─── */
 @media (max-width: 640px) {
     #header h1 { font-size: 1rem; }

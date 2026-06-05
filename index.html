@@ -18,6 +18,7 @@
             <button id="btn-toggle-click" class="btn-toggle-hover" title="Abrir panel al hacer clic en un país">👆</button>
             <button id="btn-toggle-all" class="btn-toggle-hover" title="Activar/desactivar todo (países)">🔲</button>
             <button id="btn-export" class="btn btn-secondary" title="Exportar data.js" style="display:none">📥 Exportar</button>
+            <button id="btn-region-edit" class="btn" title="Editar fronteras del mapa">🗺️ Fronteras</button>
             <button id="btn-edit" class="btn">✏️ Editar</button>
         </div>
     </div>
@@ -29,6 +30,19 @@
         <span id="sync-status" style="display:none;font-size:0.75rem;color:#7a9aba"></span>
         <button id="btn-password" class="btn btn-secondary btn-sm" style="display:none">🔑 Contraseña</button>
         <span class="edit-hint">arrastra para mover</span>
+    </div>
+
+    <div id="region-bar" style="display:none">
+        <span>🗺️ <strong>Editor</strong></span>
+        <select id="rb-region-select">
+            <option value="">— Nueva región —</option>
+        </select>
+        <span id="rb-status" style="color:#7a9aba;font-size:0.8rem">Haz clic en el mapa para añadir vértices</span>
+        <button id="rb-undo" class="btn-sm" style="display:none">↩️</button>
+        <button id="rb-select" class="btn-sm" style="display:none">🟦 Seleccionar</button>
+        <button id="rb-delete-selected" class="btn-sm" style="display:none;background:#6b1a1a;color:#ffb0b0">🗑️ Borrar (0)</button>
+        <button id="rb-clear" class="btn-sm" style="display:none">🗑️ Todo</button>
+        <button id="rb-save" class="btn-sm btn-primary" style="display:none">💾 Guardar</button>
     </div>
 
     <div id="map"></div>
@@ -112,7 +126,7 @@
         s.src = 'data.js?v=' + Date.now();
         s.onload = function() {
             var s2 = document.createElement('script');
-            s2.src = 'script.js';
+            s2.src = 'script.js?v=' + Date.now();
             document.body.appendChild(s2);
         };
         document.body.appendChild(s);

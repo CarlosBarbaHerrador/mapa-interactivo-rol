@@ -14,37 +14,11 @@
     L.imageOverlay(data.mapImage, imageBounds).addTo(map);
     map.setView(data.center, data.zoom);
 
-    // ─── PERSISTENCIA DE REGIONES ───
-    const REGION_STORAGE_KEY = 'mapa_rol_regions';
 
-    function saveRegionsState() {
-        try {
-            const saved = data.regions.map(r => ({
-                name: r.name, description: r.description,
-                color: r.color, path: r.path, transform: r.transform
-            }));
-            localStorage.setItem(REGION_STORAGE_KEY, JSON.stringify(saved));
-        } catch (e) {}
-    }
-
-    function loadRegionsData() {
-        try {
-            const raw = localStorage.getItem(REGION_STORAGE_KEY);
-            if (!raw) return;
-            const saved = JSON.parse(raw);
-            saved.forEach(sr => {
-                const match = data.regions.find(r => r.name === sr.name);
-                if (match) {
-                    if (sr.description !== undefined) match.description = sr.description;
-                    if (sr.color !== undefined) match.color = sr.color;
-                }
-            });
-        } catch (e) {}
-    }
-
-    loadRegionsData();
 
     // ─── REGIONES (SVG overlay) ───
+    let svgOverlayRef = null;
+
     function initRegions() {
         if (!data.regions || data.regions.length === 0) return;
 
@@ -94,6 +68,7 @@
             });
 
             path.addEventListener('mouseleave', () => {
+                if (!hoverEnabled) return;
                 if (activeRegion !== region.name) {
                     path.setAttribute('fill', 'transparent');
                     path.setAttribute('stroke', 'none');
@@ -113,9 +88,522 @@
 
         const overlay = L.svgOverlay(svg, data.bounds, { interactive: false });
         overlay.addTo(map);
+        svgOverlayRef = overlay;
     }
 
     initRegions();
+
+    // ─── EDITOR DE FRONTERAS (crear y modificar regiones) ───
+    const IMG_H = data.bounds[1][0];
+    let regionEditMode = false;
+    let regionVerts = [];
+    let editingRegionName = '';
+    let regionPolygon = null;
+    let vertexMarkers = [];
+    let _rbLastClick = 0;
+
+    function getImageCoords(containerPoint) {
+        const ll = map.containerPointToLatLng(containerPoint);
+        return { x: ll.lng, y: ll.lat };
+    }
+
+    function parseRegionPath(region) {
+        const m = region.transform.match(/translate\(([\d.-]+),\s*([\d.-]+)\)/);
+        const tx = m ? parseFloat(m[1]) : 0;
+        const ty = m ? parseFloat(m[2]) : 0;
+        console.log(`[parseRegionPath] "${region.name}" transform=(${tx}, ${ty})`);
+        const pts = [];
+        const str = region.path;
+        let i = 0, curX = 0, curY = 0;
+        const len = str.length;
+
+        function readNum() {
+            while (i < len && (str[i] === ' ' || str[i] === ',' || str[i] === '\t' || str[i] === '\n')) i++;
+            if (i >= len) return NaN;
+            let start = i, hasDot = false;
+            if (str[i] === '-' || str[i] === '+') i++;
+            while (i < len) {
+                const c = str[i];
+                if (c >= '0' && c <= '9') { i++; continue; }
+                if (c === '.' && !hasDot) { hasDot = true; i++; continue; }
+                break;
+            }
+            if (start === i) return NaN;
+            return parseFloat(str.slice(start, i));
+        }
+
+        function addPt() {
+            pts.push({ x: curX + tx, y: IMG_H - (curY + ty) });
+        }
+
+        while (i < len) {
+            let cmd = str[i];
+            if (cmd >= 'A' && cmd <= 'Z') { i++; }
+            else if (cmd >= 'a' && cmd <= 'z') { i++; }
+            else break;
+
+            const isRel = cmd >= 'a' && cmd <= 'z';
+            if (isRel) cmd = cmd.toUpperCase();
+
+            if (cmd === 'Z') { break; }
+
+            if (cmd === 'M' || cmd === 'L') {
+                while (true) {
+                    const x = readNum(); if (isNaN(x)) break;
+                    const y = readNum(); if (isNaN(y)) break;
+                    curX = isRel ? curX + x : x;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                    if (cmd === 'M') cmd = 'L';
+                }
+            } else if (cmd === 'H') {
+                while (true) {
+                    const x = readNum(); if (isNaN(x)) break;
+                    curX = isRel ? curX + x : x;
+                    addPt();
+                }
+            } else if (cmd === 'V') {
+                while (true) {
+                    const y = readNum(); if (isNaN(y)) break;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                }
+            } else if (cmd === 'C') {
+                while (true) {
+                    const x1 = readNum(); if (isNaN(x1)) break;
+                    const y1 = readNum(); if (isNaN(y1)) break;
+                    const x2 = readNum(); if (isNaN(x2)) break;
+                    const y2 = readNum(); if (isNaN(y2)) break;
+                    const x = readNum(); if (isNaN(x)) break;
+                    const y = readNum(); if (isNaN(y)) break;
+                    curX = isRel ? curX + x : x;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                }
+            } else if (cmd === 'Q') {
+                while (true) {
+                    const x1 = readNum(); if (isNaN(x1)) break;
+                    const y1 = readNum(); if (isNaN(y1)) break;
+                    const x = readNum(); if (isNaN(x)) break;
+                    const y = readNum(); if (isNaN(y)) break;
+                    curX = isRel ? curX + x : x;
+                    curY = isRel ? curY + y : y;
+                    addPt();
+                }
+            } else { break; }
+        }
+        console.log(`[parseRegionPath] ${pts.length} pts, bounds: x=[${Math.min(...pts.map(p=>p.x)).toFixed(1)},${Math.max(...pts.map(p=>p.x)).toFixed(1)}] y=[${Math.min(...pts.map(p=>p.y)).toFixed(1)},${Math.max(...pts.map(p=>p.y)).toFixed(1)}]`);
+        if (pts.length > 0) console.log(`[parseRegionPath] first=${JSON.stringify(pts[0])} last=${JSON.stringify(pts[pts.length-1])}`);
+        return pts;
+    }
+
+    function distToSegment(px, py, x1, y1, x2, y2) {
+        const dx = x2 - x1, dy = y2 - y1;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+        let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        const px2 = x1 + t * dx, py2 = y1 + t * dy;
+        return Math.sqrt((px - px2) * (px - px2) + (py - py2) * (py - py2));
+    }
+
+    function rebuildRegionPreview() {
+        if (regionPolygon) map.removeLayer(regionPolygon);
+        if (regionVerts.length < 3) { regionPolygon = null; return; }
+        const coords = regionVerts.map(p => [p.y, p.x]);
+        coords.push(coords[0]);
+        regionPolygon = L.polygon(coords, {
+            color: '#e94560', weight: 3, fillColor: '#e94560', fillOpacity: 0.15
+        }).addTo(map);
+        regionPolygon.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            const n = regionVerts.length;
+            let best = -1, bestDist = Infinity;
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                const d = distToSegment(e.latlng.lng, e.latlng.lat,
+                    regionVerts[i].x, regionVerts[i].y,
+                    regionVerts[j].x, regionVerts[j].y);
+                if (d < bestDist) { bestDist = d; best = i; }
+            }
+            regionVerts.splice(best + 1, 0, { x: e.latlng.lng, y: e.latlng.lat });
+            rebuildVertexMarkers();
+            rebuildRegionPreview();
+            updateRegionUI();
+        });
+    }
+
+    let _previewLine = null;
+    let _selectMode = false;
+    let _selectedVerts = new Set();
+
+    function updatePreviewLine(ll) {
+        if (_previewLine) { map.removeLayer(_previewLine); _previewLine = null; }
+        if (regionVerts.length === 0 || !ll) return;
+        const last = regionVerts[regionVerts.length - 1];
+        _previewLine = L.polyline([[last.y, last.x], [ll.lat, ll.lng]], {
+            color: '#e94560', weight: 2, dashArray: '6,8', opacity: 0.6
+        }).addTo(map);
+    }
+
+    function rebuildVertexMarkers() {
+        vertexMarkers.forEach(m => map.removeLayer(m));
+        vertexMarkers = [];
+        regionVerts.forEach((p, i) => {
+            const isLast = i === regionVerts.length - 1;
+            const isSel = _selectedVerts.has(i);
+            const bg = isSel ? '#4488ff' : isLast ? '#ffdd44' : '#fff';
+            const border = isSel ? '#2244cc' : '#e94560';
+            const borderW = isSel ? 4 : isLast ? 4 : 3;
+            const txtColor = isSel ? '#fff' : isLast ? '#c33' : '#e94560';
+            const marker = L.marker([p.y, p.x], {
+                icon: L.divIcon({
+                    className: 'region-vertex',
+                    html: `<div style="width:22px;height:22px;background:${bg};border-radius:50%;border:${borderW}px solid ${border};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${txtColor}">${i+1}</div>`,
+                    iconSize: [22, 22], iconAnchor: [11, 11]
+                }),
+                draggable: !_selectMode
+            });
+            marker._vertIndex = i;
+            marker.on('drag', (e) => {
+                const pos = e.target.getLatLng();
+                regionVerts[i] = { x: pos.lng, y: pos.lat };
+                rebuildRegionPreview();
+            });
+            marker.on('dragend', () => updatePreviewLine(null));
+            marker.on('click', (e) => {
+                if (e.originalEvent) e.originalEvent.stopPropagation();
+                if (_selectMode) {
+                    if (_selectedVerts.has(i)) _selectedVerts.delete(i);
+                    else _selectedVerts.add(i);
+                    rebuildVertexMarkers();
+                    updateSelectUI();
+                }
+            });
+            marker.on('mousedown', (e) => { if (e.originalEvent) e.originalEvent.stopPropagation(); });
+            marker.on('dblclick', () => {
+                if (_selectMode) return;
+                if (regionVerts.length <= 3) return;
+                regionVerts.splice(i, 1);
+                rebuildVertexMarkers();
+                rebuildRegionPreview();
+                updateRegionUI();
+            });
+            marker.addTo(map);
+            vertexMarkers.push(marker);
+        });
+        document.querySelectorAll('.region-vertex').forEach(el => el.title = 'Arrastrar para mover · Doble clic para eliminar');
+    }
+
+    function updateRegionUI() {
+        document.getElementById('rb-undo').style.display = regionVerts.length > 0 ? 'inline-block' : 'none';
+        document.getElementById('rb-clear').style.display = regionVerts.length > 0 ? 'inline-block' : 'none';
+        document.getElementById('rb-save').style.display = regionVerts.length >= 3 ? 'inline-block' : 'none';
+        document.getElementById('rb-select').style.display = regionVerts.length > 0 ? 'inline-block' : 'none';
+        document.getElementById('rb-status').textContent =
+            regionVerts.length === 0 ? 'Haz clic en el mapa para añadir vértices' :
+            regionVerts.length < 3 ? `${regionVerts.length} vértices — necesitas al menos 3` :
+            `${regionVerts.length} vértices`;
+    }
+
+    function loadRegionVerts(region) {
+        if (_selectMode) { _selectMode = false; _selectedVerts.clear(); document.getElementById('rb-select').textContent = '🟦 Seleccionar'; document.getElementById('rb-delete-selected').style.display = 'none'; }
+        regionVerts = parseRegionPath(region);
+        editingRegionName = region.name;
+        updatePreviewLine(null);
+        rebuildVertexMarkers();
+        rebuildRegionPreview();
+        updateRegionUI();
+        document.getElementById('rb-status').textContent =
+            `Editando "${region.name}" — ${regionVerts.length} vértices` +
+            (regionVerts.length >= 3 ? ' (puedes arrastrar y añadir)' : '');
+        if (regionVerts.length > 0) {
+            const latlngs = regionVerts.map(p => [p.y, p.x]);
+            const bounds = L.latLngBounds(latlngs);
+            map.fitBounds(bounds.pad(0.3), { maxZoom: 1 });
+        }
+    }
+
+    function onRegionMapClick(e) {
+        if (!regionEditMode) return;
+        if (_selectMode) { toggleSelectMode(); return; }
+        if (e.originalEvent && e.originalEvent.button !== 0) return;
+        const now = Date.now();
+        if (now - _rbLastClick < 400) return;
+        _rbLastClick = now;
+        const c = getImageCoords(e.containerPoint);
+        regionVerts.push(c);
+        rebuildVertexMarkers();
+        rebuildRegionPreview();
+        updateRegionUI();
+        if (!editingRegionName && regionVerts.length === 3)
+            document.getElementById('rb-status').textContent = '3 vértices — puedes guardar o seguir añadiendo';
+        updatePreviewLine(null);
+    }
+
+    function onRegionMapMove(e) {
+        if (!regionEditMode) return;
+        if (_selectMode) { updatePreviewLine(null); return; }
+        updatePreviewLine(e.latlng);
+    }
+
+    function regionUndo() {
+        if (regionVerts.length === 0) return;
+        regionVerts.pop();
+        rebuildVertexMarkers();
+        rebuildRegionPreview();
+        updateRegionUI();
+        updatePreviewLine(null);
+    }
+
+    function regionClear() {
+        if (regionVerts.length === 0) return;
+        regionVerts = [];
+        editingRegionName = '';
+        document.getElementById('rb-region-select').value = '';
+        rebuildVertexMarkers();
+        rebuildRegionPreview();
+        updatePreviewLine(null);
+        if (_selectMode) {
+            _selectMode = false;
+            _selectedVerts.clear();
+            const sb = document.getElementById('rb-select');
+            sb.style.background = '';
+            sb.style.color = '';
+            sb.textContent = '🟦 Seleccionar';
+            document.getElementById('rb-delete-selected').style.display = 'none';
+        }
+        updateRegionUI();
+        document.getElementById('rb-status').textContent = 'Haz clic en el mapa para añadir vértices';
+    }
+
+    function regionSave() {
+        if (regionVerts.length < 3) return;
+
+        const isEdit = !!editingRegionName;
+        const name = isEdit ? editingRegionName : prompt('Nombre de la nueva región:');
+        if (!isEdit && (!name || !name.trim())) return;
+        const nameTrim = isEdit ? editingRegionName : name.trim();
+
+        const svgPts = regionVerts.map(p => ({
+            x: Math.round(p.x * 100) / 100,
+            y: Math.round((IMG_H - p.y) * 100) / 100
+        }));
+        let minSvgX = Infinity, minSvgY = Infinity;
+        svgPts.forEach(p => { if (p.x < minSvgX) minSvgX = p.x; if (p.y < minSvgY) minSvgY = p.y; });
+
+        const pathParts = svgPts.map(p => `L${(p.x - minSvgX).toFixed(2)} ${(p.y - minSvgY).toFixed(2)}`);
+        pathParts[0] = 'M' + pathParts[0].slice(1);
+        pathParts.push('Z');
+
+        if (isEdit) {
+            const idx = data.regions.findIndex(r => r.name === editingRegionName);
+            if (idx !== -1) {
+                data.regions[idx].path = pathParts.join('');
+                data.regions[idx].transform = `translate(${minSvgX.toFixed(2)}, ${minSvgY.toFixed(2)})`;
+                alert(`Frontera de "${editingRegionName}" actualizada ✅`);
+                rebuildSvgOverlay();
+            }
+            toggleRegionEditMode();
+        } else {
+            data.regions.push({
+                name: nameTrim, path: pathParts.join(''),
+                color: '#e94560', transform: `translate(${minSvgX.toFixed(2)}, ${minSvgY.toFixed(2)})`, description: ''
+            });
+            if (confirm(`Región "${nameTrim}" creada ✅\n\n¿Recargar para verla en el mapa?`)) location.reload();
+            toggleRegionEditMode();
+        }
+    }
+
+    function updateSelectUI() {
+        const count = _selectedVerts.size;
+        const btn = document.getElementById('rb-delete-selected');
+        btn.style.display = count > 0 ? 'inline-block' : 'none';
+        btn.textContent = `🗑️ Borrar (${count})`;
+    }
+
+    function toggleSelectMode() {
+        _selectMode = !_selectMode;
+        const btn = document.getElementById('rb-select');
+        if (_selectMode) {
+            btn.style.background = '#4488ff';
+            btn.style.color = '#fff';
+            btn.textContent = '❌ Salir selección';
+            _selectedVerts.clear();
+            map.getContainer().style.cursor = 'default';
+            updateSelectUI();
+        } else {
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.textContent = '🟦 Seleccionar';
+            _selectedVerts.clear();
+            map.getContainer().style.cursor = 'crosshair';
+            document.getElementById('rb-delete-selected').style.display = 'none';
+        }
+        rebuildVertexMarkers();
+    }
+
+    function deleteSelected() {
+        if (_selectedVerts.size === 0) return;
+        const sorted = [..._selectedVerts].sort((a, b) => b - a);
+        for (const idx of sorted) regionVerts.splice(idx, 1);
+        _selectedVerts.clear();
+        if (regionVerts.length < 3) { regionClear(); return; }
+        rebuildVertexMarkers();
+        rebuildRegionPreview();
+        updateRegionUI();
+        toggleSelectMode();
+    }
+
+    function rebuildSvgOverlay() {
+        if (svgOverlayRef) { map.removeLayer(svgOverlayRef); svgOverlayRef = null; }
+        if (data.regions && data.regions.length > 0) {
+            const svgNS = 'http://www.w3.org/2000/svg';
+            const svg = document.createElementNS(svgNS, 'svg');
+            svg.setAttribute('viewBox', '0 0 4096 2389');
+            svg.setAttribute('width', '100%');
+            svg.setAttribute('height', '100%');
+            svg.style.pointerEvents = 'none';
+
+            const defs = document.createElementNS(svgNS, 'defs');
+            defs.innerHTML = `<filter id="region-glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+                <feFlood flood-color="#ffffff" flood-opacity="0.8" result="color"/>
+                <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+                <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>`;
+            svg.appendChild(defs);
+
+            data.regions.forEach(region => {
+                const path = document.createElementNS(svgNS, 'path');
+                path.setAttribute('d', region.path);
+                if (region.transform) path.setAttribute('transform', region.transform);
+                path.setAttribute('data-region', region.name);
+                path.setAttribute('fill', 'transparent');
+                path.setAttribute('stroke', 'none');
+                path.setAttribute('stroke-width', '0');
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('stroke-linejoin', 'round');
+                path.style.pointerEvents = 'auto';
+                path.style.cursor = 'pointer';
+                path.style.transition = 'all 0.2s ease';
+
+                path.addEventListener('mouseenter', () => {
+                    if (!hoverEnabled) return;
+                    path.setAttribute('stroke', region.color || '#e94560');
+                    path.setAttribute('stroke-width', '4');
+                    path.setAttribute('fill', (region.color || '#e94560') + '60');
+                    path.setAttribute('filter', 'url(#region-glow)');
+                });
+                path.addEventListener('mouseleave', () => {
+                    if (!hoverEnabled) return;
+                    if (activeRegion !== region.name) {
+                        path.setAttribute('fill', 'transparent');
+                        path.setAttribute('stroke', 'none');
+                        path.setAttribute('stroke-width', '0');
+                        path.removeAttribute('filter');
+                    }
+                });
+                path.addEventListener('click', (e) => {
+                    if (!clickEnabled) return;
+                    e.stopPropagation();
+                    openRegionPanel(region);
+                });
+                svg.appendChild(path);
+            });
+
+            svgOverlayRef = L.svgOverlay(svg, data.bounds, { interactive: false });
+            svgOverlayRef.addTo(map);
+        }
+    }
+
+    function setRegionVisibility(visible) {
+        data.regions.forEach(r => {
+            const p = document.querySelector(`[data-region="${r.name}"]`);
+            if (!p) return;
+            if (visible) {
+                p.setAttribute('stroke', (r.color || '#e94560') + '80');
+                p.setAttribute('stroke-width', '2');
+                p.setAttribute('fill', 'transparent');
+                p.removeAttribute('filter');
+            } else {
+                p.setAttribute('fill', 'transparent');
+                p.setAttribute('stroke', 'none');
+                p.setAttribute('stroke-width', '0');
+                p.removeAttribute('filter');
+            }
+        });
+    }
+
+    function toggleRegionEditMode() {
+        regionEditMode = !regionEditMode;
+        const bar = document.getElementById('region-bar');
+        if (regionEditMode) {
+            bar.style.display = 'flex';
+            const sel = document.getElementById('rb-region-select');
+            sel.innerHTML = '<option value="">— Nueva región —</option>';
+            data.regions.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.name;
+                opt.textContent = r.name;
+                sel.appendChild(opt);
+            });
+
+            hoverEnabled = false;
+            setRegionVisibility(true);
+            setClickState(false);
+            map.dragging.disable();
+            map.touchZoom.disable();
+            map.doubleClickZoom.disable();
+            map.boxZoom.disable();
+            map.keyboard.disable();
+            map.getContainer().style.cursor = 'crosshair';
+            map.on('click', onRegionMapClick);
+            map.on('mousemove', onRegionMapMove);
+        } else {
+            bar.style.display = 'none';
+            document.getElementById('rb-region-select').innerHTML = '<option value="">— Nueva región —</option>';
+            regionVerts = [];
+            editingRegionName = '';
+            rebuildVertexMarkers();
+            rebuildRegionPreview();
+            setRegionVisibility(false);
+            hoverEnabled = true;
+            setClickState(true);
+            map.dragging.enable();
+            map.touchZoom.enable();
+            map.doubleClickZoom.enable();
+            map.boxZoom.enable();
+            map.keyboard.enable();
+            map.getContainer().style.cursor = '';
+            map.off('click', onRegionMapClick);
+            map.off('mousemove', onRegionMapMove);
+            updatePreviewLine(null);
+            if (_selectMode) {
+                _selectMode = false;
+                _selectedVerts.clear();
+                const sb = document.getElementById('rb-select');
+                sb.style.background = '';
+                sb.style.color = '';
+                sb.textContent = '🟦 Seleccionar';
+                document.getElementById('rb-delete-selected').style.display = 'none';
+            }
+        }
+    }
+
+    document.getElementById('btn-region-edit').addEventListener('click', toggleRegionEditMode);
+    document.getElementById('rb-region-select').addEventListener('change', function () {
+        if (!regionEditMode) return;
+        const val = this.value;
+        if (!val) { regionClear(); return; }
+        const r = data.regions.find(rr => rr.name === val);
+        if (r) loadRegionVerts(r);
+    });
+    document.getElementById('rb-undo').addEventListener('click', regionUndo);
+    document.getElementById('rb-clear').addEventListener('click', regionClear);
+    document.getElementById('rb-save').addEventListener('click', regionSave);
+    document.getElementById('rb-select').addEventListener('click', toggleSelectMode);
+    document.getElementById('rb-delete-selected').addEventListener('click', deleteSelected);
 
     // ─── TOGGLES ───
     let hoverEnabled = true;
@@ -220,7 +708,6 @@
         }
 
         document.getElementById('region-panel-desc').textContent = desc;
-        saveRegionsState();
     }
 
     function closeRegionPanel() {
@@ -246,6 +733,7 @@
     });
 
     map.on('click', function () {
+        if (regionEditMode) return;
         if (!clickEnabled) return;
         if (activeRegion) closeRegionPanel();
     });
@@ -737,7 +1225,7 @@
     });
 
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') { closeModal(); cancelPlacing(); }
+        if (e.key === 'Escape') { closeModal(); cancelPlacing(); if (regionEditMode) toggleRegionEditMode(); }
     });
 
     window.addEventListener('resize', () => map.invalidateSize());
@@ -749,5 +1237,4 @@
             document.getElementById('edit-coords').value = JSON.stringify([pos.lat, pos.lng]);
         }
     });
-
 })();

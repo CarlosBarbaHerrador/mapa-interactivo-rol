@@ -1,2 +1,4 @@
 /data.js
   Cache-Control: no-cache, must-revalidate
+/drawing.json
+  Cache-Control: no-cache, must-revalidate
