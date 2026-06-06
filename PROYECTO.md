@@ -78,7 +78,7 @@
 
 ## Cómo usarlo
 1. Abrir `index.html` (local o desplegado)
-2. Click "✏️ Editar" → password: `admin`
+2. Click "✏️ Editar" → password: `1`
 3. Editar regiones, añadir POIs, pintar
 4. Todo se guarda solo en Supabase
 
