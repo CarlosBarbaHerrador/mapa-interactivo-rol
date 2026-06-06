@@ -3,13 +3,34 @@
 ## Stack
 - HTML + CSS + JavaScript vanilla en IIFE
 - Leaflet.js con `L.CRS.Simple` (mapa de imágenes, no coordenadas reales)
+- **Supabase** como backend: persistencia, tiempo real, multijugador
 - Sin frameworks, sin bundlers
 
 ## Estructura
 - `index.html` — layout, barras de herramientas, modal
 - `styles.css` — todos los estilos
-- `data.js` — **variable global `MAP_DATA`** con toda la configuración: bounds, zoom, categorías, regiones, POIs, password
+- `data.js` — configuración estática (bounds, zoom, categorías, password), **ya no contiene datos dinámicos**
+- `supabase.js` — crea y exporta el cliente Supabase (`var sb = ...`)
 - `script.js` — toda la lógica en una IIFE `(function(){ ... })()`
+- `init.sql` — esquema original de tablas Supabase
+- `migration.sql` — migraciones para adaptar tablas al frontend
+
+## Supabase
+- Proyecto: `rmfoquszgkuntfhlkhcd.supabase.co`
+- Tablas: `regions`, `pois`, `paint`, `cursors` (todo con RLS público)
+- Las tablas `regions`, `pois`, `paint`, `cursors` tienen Realtime habilitado
+- Anon key en `supabase.js` (pública, segura por RLS)
+
+### Flujo:
+1. **script.js** crea `sbUpsert()`, `sbDelete()`, `sbSavePaint()` helpers
+2. **loadFromSupabase()** se llama al inicio: fetchea regions, pois, paint de Supabase y reemplaza datos estáticos
+3. **setupRealtime()** se suscribe a cambios en las 4 tablas; cualquier cambio → recarga datos automáticamente (tiempo real)
+4. Cada edición (región, POI, pintura) escribe directo a Supabase, todos los clientes lo ven al instante
+
+### Cursor tracking:
+- En modo edición, cada mouse move envía coordenadas a `cursors` (throttle 80ms)
+- Los demás ven círculos con tooltip del usuario
+- Limpieza automática de cursores viejos (>5 segundos)
 
 ## Mapa
 - Imagen de 4096×2389 px: `Mapa-Figma.png`
@@ -18,75 +39,49 @@
 
 ## Sistema de Regiones (SVG Overlay)
 - Cada región tiene: `name`, `path` (SVG path relativo), `transform` (translate), `color`, `description`, `extraPaths`
-- Las regiones se renderizan con `L.svgOverlay` en un SVG con viewBox `0 0 4096 2389`
-- `extraPaths` son paths adicionales del mismo país: `[{ d, transform, type: 'island'|'lake' }]`
-- Los **lagos** usan un `<mask>` SVG (rectángulo blanco + lago en negro) para hacer huecos en fill y stroke
-- Los bordes de lagos están en un grupo separado (sin máscara) con `data-lake-edge`, invisibles por defecto, se iluminan en hover
-- Las **islas** son paths adicionales con el mismo fill/stroke/hover que el path principal
-- Hover/click en el `<g>` del país (no en paths individuales): al hover se ilumina todo el grupo (continente + islas + bordes de lago)
-
-### Funciones clave:
-- `createRegionSvg(svgNS, region)` — crea el `<g>` con paths, máscara de lagos, bordes de lagos y eventos hover/click
-- `initRegions()` — crea el SVG overlay inicial
-- `rebuildSvgOverlay()` — destruye y reconstruye el SVG overlay (tras guardar cambios)
-- `setRegionVisibility(visible)` — `true` = oculta, `false` = muestra (usado en editor)
-- `openRegionPanel(region)` / `closeRegionPanel()` — panel lateral de región (desc, color)
-- `saveRegionEdit()` — guarda desc/color del panel
-- `setHoverState(state)` / `setClickState(state)` — toggle interactividad
+- Se renderizan con `L.svgOverlay` en un SVG con viewBox `0 0 4096 2389`
+- `extraPaths`: paths adicionales del mismo país: `[{ d, transform, type: 'island'|'lake' }]`
+- Lagos usan `<mask>` SVG (rectángulo blanco + lago en negro) para huecos en fill y stroke
+- Bordes de lagos en grupo separado (sin máscara) con `data-lake-edge`, invisibles por defecto, se iluminan en hover
+- Islas: same fill/stroke/hover que path principal
+- Hover/click en `<g>` del país (no paths individuales): se ilumina el grupo completo
 
 ## Editor de Fronteras
-- Botón "Editar fronteras" en `#edit-bar` → `toggleRegionEditMode()`
-- Al entrar: se ocultan los overlays SVG (`setRegionVisibility(true)`), se muestra `#region-bar`, se desactiva drag/zoom del mapa
-- Al salir: se restauran overlays, drag/zoom, se limpian vectores
-
-### Variables de estado:
-- `regionVerts` — vértices del path principal (activo cuando `_activeSubIdx === -1`)
-- `_subPaths` — array de `{ verts: [], type: 'island'|'lake' }`
-- `_activeSubIdx` — -1 = main, ≥0 = índice en `_subPaths`
-- `_subPolygons` — preview de sub-paths no activos (Leaflet polygons)
-- `_regionUndoStack` — historial de undo por path activo
-
-### Funciones del editor:
-- `onRegionMapClick(e)` — añade vértice al path activo
-- `rebuildVertexMarkers()` — renderiza marcadores Leaflet para vértices activos
-- `rebuildRegionPreview()` — renderiza polígono del path activo + `rebuildSubPolygons()`
-- `regionUndo()` — deshace último cambio del path activo
-- `regionClear()` — limpia todo (verts, sub-paths, undo)
-- `regionSave()` — serializa main + sub-paths a `extraPaths`, reconstruye overlay, sale del editor
-- `loadRegionVerts(region)` — carga región existente incluyendo `extraPaths`
-- `startSubPath(type)` — empieza a dibujar isla/lago
-- `switchToMainPath()` — vuelve a editar path principal
-- `updatePathNav()` — muestra píldoras para navegar entre paths
-- `toggleSelectMode()` / `deleteSelected()` — selección múltiple y borrado de vértices
-- `vertsToSvgPath(verts)` — convierte vértices a SVG path D + transform
-- `parseRegionPath(region)` / `parseSubPathVerts(d, transform)` — parsea SVG path a array de vértices
-
-### Botones en `#region-bar`:
-- Select de región (`#rb-region-select`)
-- `#rb-undo`, `#rb-clear`, `#rb-save`, `#rb-select`, `#rb-delete-selected`
-- `#rb-add-island`, `#rb-add-lake` (visibles cuando main tiene ≥3 vértices)
-- `#rb-main` (visible cuando se está editando un sub-path)
-- `#rb-path-nav` — píldoras de navegación entre sub-paths
-- `#rb-status` — barra de estado
+- Botón "🗺️ Editar regiones" toggle
+- Soporta multi-path: main + islas/lagos (sub-paths con píldoras de navegación)
+- Undo por path activo (snapshot de vértices antes de cada mutación)
+- Dropdown de selección de región existente
 
 ## Sistema de Pintura
-- Offscreen canvas 4096×2389 + `L.imageOverlay` para mostrar pintura
-- `tempCanvas` encima del mapa para previsualización del trazo en tiempo real
-- Herramientas: brush, eraser, fill (relleno por región vectorial), pipette
-- Fill: usa `Path2D` + `isPointInPath` sobre los paths SVG de las regiones
-- Pipette: lee del canvas de pintura, si es transparente lee del `<img>` de Leaflet
-- Undo: guarda historial de strokes, replay al deshacer
-- Ctrl+Z: en modo pintura → `paintUndo()`, en modo editor → `regionUndo()`
+- Offscreen canvas 4096×2389 + `L.imageOverlay`
+- Herramientas: brush, eraser, fill, pipette
+- Datos guardados en Supabase como array de strokes en una fila (`id=0, tool='_state'`)
+- Se inicia automáticamente si hay pintura existente (aunque no se haya abierto el modo pintura)
 
 ## POIs (Puntos de Interés)
-- Array `data.pois` con objetos: `{ name, category, coords: [lat,lng], description, links }`
 - Marcadores Leaflet con iconos según categoría
-- Modal para crear/editar (con password `data.editPassword`)
+- Modal para crear/editar/eliminar en modo edición
+- Se sincronizan a Supabase con UPSERT (por id)
 
-## Constantes
-- `BOUNDARY_STROKE = 'none'` — sin línea negra permanente
-- `BOUNDARY_WIDTH = '0'`
-- Las líneas de borde solo se ven en hover/panel (color de la región)
+## Estado actual
+- ✅ Persistencia en Supabase (regiones, POIs, pintura)
+- ✅ Tiempo real: cambios se ven en otros clientes sin recargar
+- ✅ Cursores multijugador en modo edición
+- ✅ Auto-inicialización de pintura desde Supabase
+- ✅ Carga inicial desde Supabase (reemplaza data.js para datos dinámicos)
 
-## Datos (data.js)
-Se guarda en MAP_DATA. Actualmente hay 1 región de ejemplo (Masenvour) con 1 lago. POIs vacío. Password = "1".
+## Pendiente / Mejoras posibles
+- Botón "Limpiar toda la pintura"
+- Botón "Resetear regiones a original"
+- Exportar/importar datos desde Supabase
+- Mejor UI para el estado de conexión
+
+## Cómo usarlo
+1. Abrir `index.html` (local o desplegado)
+2. Click "✏️ Editar" → password: `admin`
+3. Editar regiones, añadir POIs, pintar
+4. Todo se guarda solo en Supabase
+
+## Repo
+- GitHub: `https://github.com/CarlosBarbaHerrador/mapa-interactivo-rol.git`
+- Rama: `main`
