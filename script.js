@@ -357,7 +357,7 @@
     let _rbLastClick = 0;
 
     // Sub‑path support (islands, lakes)
-    let _subPaths = [];        // [{ verts: [], type: 'island'|'lake' }]
+    let _subPaths = [];        // [{ verts: [], type: 'island'|'lake'|'territory' }]
     let _activeSubIdx = -1;    // -1 = main, 0+ = sub‑path
     let _subPolygons = [];     // Leaflet polygons for committed sub‑paths
     let _subPathHighlight = null;
@@ -369,9 +369,15 @@
         if (_activeSubIdx < 0) regionVerts = v;
         else _subPaths[_activeSubIdx].verts = v;
     }
+    function subPathLabel(sp) {
+        if (sp.type === 'lake') return 'Lago';
+        if (sp.type === 'territory') return 'Territorio';
+        return 'Isla';
+    }
+
     function getActivePathInfo() {
         return _activeSubIdx < 0 ? { type: 'main', label: 'Frontera principal' }
-            : { type: _subPaths[_activeSubIdx].type, label: (_subPaths[_activeSubIdx].type === 'island' ? 'Isla' : 'Lago') + ' ' + (_activeSubIdx + 1) };
+            : { type: _subPaths[_activeSubIdx].type, label: subPathLabel(_subPaths[_activeSubIdx]) + ' ' + (_activeSubIdx + 1) };
     }
 
     function highlightSubPath(idx, show) {
@@ -411,6 +417,12 @@
         });
     }
 
+    function subPathIcon(type) {
+        if (type === 'lake') return '🏞️';
+        if (type === 'territory') return '🗺️';
+        return '🏝️';
+    }
+
     function updatePathNav() {
         highlightSubPath(-1, false);
         const nav = document.getElementById('rb-path-nav');
@@ -419,7 +431,7 @@
         const pills = [];
         pills.push({ label: 'Main', idx: -1, active: _activeSubIdx === -1 });
         _subPaths.forEach((sp, idx) => {
-            const icon = sp.type === 'lake' ? '🏞️' : '🏝️';
+            const icon = subPathIcon(sp.type);
             const label = icon + ' ' + (idx + 1);
             pills.push({ label, idx, active: idx === _activeSubIdx });
         });
@@ -451,8 +463,8 @@
         _subPaths.forEach((sp, idx) => {
             const opt = document.createElement('option');
             opt.value = idx;
-            const icon = sp.type === 'lake' ? '🏞️' : '🏝️';
-            const label = (sp.type === 'lake' ? 'Lago ' : 'Isla ') + (idx + 1);
+            const icon = subPathIcon(sp.type);
+            const label = subPathLabel(sp) + ' ' + (idx + 1);
             opt.textContent = icon + ' ' + label + ' (' + sp.verts.length + ' v)';
             if (idx === _activeSubIdx) opt.selected = true;
             subpathSelect.appendChild(opt);
@@ -794,6 +806,7 @@
         document.getElementById('rb-save').style.display = mainLen >= 3 ? 'inline-block' : 'none';
         document.getElementById('rb-select').style.display = mainLen > 0 ? 'inline-block' : 'none';
         document.getElementById('rb-add-island').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
+        document.getElementById('rb-add-territory').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
         document.getElementById('rb-add-lake').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
         document.getElementById('rb-delete-region').style.display = editingRegionName ? 'inline-block' : 'none';
         document.getElementById('rb-delete-subpath').style.display = _activeSubIdx >= 0 ? 'inline-block' : 'none';
@@ -1020,7 +1033,7 @@
     function deleteActiveSubPath() {
         if (_activeSubIdx < 0 || _activeSubIdx >= _subPaths.length) return;
         const info = getActivePathInfo();
-        const label = info.type === 'lake' ? 'lago' : 'isla';
+        const label = info.type === 'lake' ? 'lago' : info.type === 'territory' ? 'territorio' : 'isla';
         if (!confirm(`¿Eliminar este ${label}?`)) return;
         _subPaths.splice(_activeSubIdx, 1);
         _activeSubIdx = -1;
@@ -1122,6 +1135,7 @@
             });
 
             document.getElementById('rb-add-island').style.display = 'none';
+            document.getElementById('rb-add-territory').style.display = 'none';
             document.getElementById('rb-add-lake').style.display = 'none';
             document.getElementById('rb-main').style.display = 'none';
             _subPaths = [];
@@ -1144,6 +1158,7 @@
             bar.style.display = 'none';
             document.getElementById('rb-region-select').innerHTML = '<option value="">— Nueva región —</option>';
             document.getElementById('rb-add-island').style.display = 'none';
+            document.getElementById('rb-add-territory').style.display = 'none';
             document.getElementById('rb-add-lake').style.display = 'none';
             document.getElementById('rb-main').style.display = 'none';
             document.getElementById('rb-path-nav').style.display = 'none';
@@ -1188,6 +1203,7 @@
         _activeSubIdx = _subPaths.length - 1;
         _regionUndoStack = [];
         document.getElementById('rb-add-island').style.display = 'none';
+        document.getElementById('rb-add-territory').style.display = 'none';
         document.getElementById('rb-add-lake').style.display = 'none';
         document.getElementById('rb-main').style.display = 'inline-block';
         rebuildVertexMarkers();
@@ -1203,6 +1219,7 @@
         _regionUndoStack = [];
         const mainOk = regionVerts.length >= 3;
         document.getElementById('rb-add-island').style.display = mainOk ? 'inline-block' : 'none';
+        document.getElementById('rb-add-territory').style.display = mainOk ? 'inline-block' : 'none';
         document.getElementById('rb-add-lake').style.display = mainOk ? 'inline-block' : 'none';
         document.getElementById('rb-main').style.display = 'none';
         rebuildVertexMarkers();
@@ -1225,6 +1242,7 @@
     document.getElementById('rb-select').addEventListener('click', toggleSelectMode);
     document.getElementById('rb-delete-selected').addEventListener('click', deleteSelected);
     document.getElementById('rb-add-island').addEventListener('click', () => startSubPath('island'));
+    document.getElementById('rb-add-territory').addEventListener('click', () => startSubPath('territory'));
     document.getElementById('rb-add-lake').addEventListener('click', () => startSubPath('lake'));
     document.getElementById('rb-main').addEventListener('click', switchToMainPath);
     document.getElementById('rb-delete-region').addEventListener('click', deleteRegion);
