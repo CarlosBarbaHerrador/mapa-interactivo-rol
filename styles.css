@@ -510,6 +510,22 @@ body {
     white-space: nowrap;
 }
 
+#rb-subpath-select {
+    background: #0a1628;
+    color: #e0e0e0;
+    border: 1px solid #3a5a7a;
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 0.72rem;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    max-width: 140px;
+}
+#rb-subpath-select:focus {
+    border-color: #e94560;
+}
+
 #region-bar .btn-primary {
     background: #e94560;
     color: #fff;

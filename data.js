@@ -16,7 +16,7 @@ const MAP_DATA = {
     "zoom": 0,
     "minZoom": -2,
     "maxZoom": 3,
-    "mapImage": "Mapa-Figma.png",
+    "mapImage": "MapaExtended.png",
     "categories": {
         "capital": {
             "label": "Capitales",

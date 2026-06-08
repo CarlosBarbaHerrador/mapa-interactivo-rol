@@ -18,6 +18,7 @@
             <button id="btn-toggle-hover" class="btn-toggle-hover" title="Mostrar bordes de países al pasar el ratón">🌍</button>
             <button id="btn-toggle-click" class="btn-toggle-hover" title="Abrir panel al hacer clic en un país">👆</button>
             <button id="btn-toggle-all" class="btn-toggle-hover" title="Activar/desactivar todo (países)">🔲</button>
+            <button id="btn-toggle-markers" class="btn-toggle-hover" title="Mostrar/ocultar marcadores">📍</button>
             <button id="btn-export" class="btn btn-secondary" title="Exportar data.js" style="display:none">📥 Exportar</button>
             <button id="btn-region-edit" class="btn" title="Editar fronteras del mapa">🗺️ Fronteras</button>
             <button id="btn-edit" class="btn">✏️ Editar</button>
@@ -57,14 +58,17 @@
         </select>
         <span id="rb-status" style="color:#7a9aba;font-size:0.8rem">Haz clic en el mapa para añadir vértices</span>
         <span id="rb-path-nav" style="display:none"></span>
+        <select id="rb-subpath-select" style="display:none"></select>
         <button id="rb-undo" class="btn-sm" style="display:none">↩️</button>
         <button id="rb-select" class="btn-sm" style="display:none">🟦 Seleccionar</button>
         <button id="rb-delete-selected" class="btn-sm" style="display:none;background:#6b1a1a;color:#ffb0b0">🗑️ Borrar (0)</button>
         <button id="rb-clear" class="btn-sm" style="display:none">🗑️ Todo</button>
         <button id="rb-save" class="btn-sm btn-primary" style="display:none">💾 Guardar</button>
+        <button id="rb-delete-region" class="btn-sm" style="display:none;background:#6b1a1a;color:#ffb0b0">🗑️ Eliminar región</button>
         <button id="rb-add-island" class="btn-sm" style="display:none">🏝️ +Isla</button>
         <button id="rb-add-lake" class="btn-sm" style="display:none">🏞️ +Lago</button>
         <button id="rb-main" class="btn-sm" style="display:none">[M] Main</button>
+        <button id="rb-delete-subpath" class="btn-sm" style="display:none;background:#6b1a1a;color:#ffb0b0">🗑️ Eliminar</button>
     </div>
 
     <div id="map"></div>
@@ -85,6 +89,8 @@
                 <p id="region-panel-desc"></p>
             </div>
             <div id="region-panel-edit" style="display:none">
+                <label>Nombre</label>
+                <input type="text" id="region-edit-name" autocomplete="off">
                 <label>Descripción</label>
                 <textarea id="region-edit-desc" rows="4"></textarea>
                 <label>Color del borde</label>

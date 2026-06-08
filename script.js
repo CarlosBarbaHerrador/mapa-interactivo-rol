@@ -360,6 +360,7 @@
     let _subPaths = [];        // [{ verts: [], type: 'island'|'lake' }]
     let _activeSubIdx = -1;    // -1 = main, 0+ = sub‑path
     let _subPolygons = [];     // Leaflet polygons for committed sub‑paths
+    let _subPathHighlight = null;
 
     function getActiveVerts() {
         return _activeSubIdx < 0 ? regionVerts : _subPaths[_activeSubIdx].verts;
@@ -371,6 +372,27 @@
     function getActivePathInfo() {
         return _activeSubIdx < 0 ? { type: 'main', label: 'Frontera principal' }
             : { type: _subPaths[_activeSubIdx].type, label: (_subPaths[_activeSubIdx].type === 'island' ? 'Isla' : 'Lago') + ' ' + (_activeSubIdx + 1) };
+    }
+
+    function highlightSubPath(idx, show) {
+        if (_subPathHighlight) {
+            try { map.removeLayer(_subPathHighlight); } catch (e) {}
+            _subPathHighlight = null;
+        }
+        if (!show) return;
+        if (idx < 0 || idx >= _subPaths.length) return;
+        const sp = _subPaths[idx];
+        if (sp.verts.length < 3) return;
+        const coords = sp.verts.map(p => [p.y, p.x]);
+        coords.push(coords[0]);
+        const color = sp.type === 'lake' ? '#4488ff' : '#e94560';
+        _subPathHighlight = L.polygon(coords, {
+            color: '#fff',
+            weight: 4,
+            fillColor: color,
+            fillOpacity: 0.5,
+            interactive: false
+        }).addTo(map);
     }
 
     function rebuildSubPolygons() {
@@ -390,7 +412,9 @@
     }
 
     function updatePathNav() {
+        highlightSubPath(-1, false);
         const nav = document.getElementById('rb-path-nav');
+        const subpathSelect = document.getElementById('rb-subpath-select');
         nav.innerHTML = '';
         const pills = [];
         pills.push({ label: 'Main', idx: -1, active: _activeSubIdx === -1 });
@@ -399,12 +423,18 @@
             const label = icon + ' ' + (idx + 1);
             pills.push({ label, idx, active: idx === _activeSubIdx });
         });
-        if (pills.length <= 1) { nav.style.display = 'none'; return; }
+        if (pills.length <= 1) {
+            nav.style.display = 'none';
+            subpathSelect.style.display = 'none';
+            return;
+        }
         nav.style.display = 'inline-block';
         pills.forEach(p => {
             const btn = document.createElement('button');
             btn.className = 'path-pill' + (p.active ? ' path-pill-active' : '');
             btn.textContent = p.label;
+            btn.addEventListener('mouseenter', () => { if (!p.active) highlightSubPath(p.idx, true); });
+            btn.addEventListener('mouseleave', () => highlightSubPath(p.idx, false));
             btn.addEventListener('click', () => {
                 if (p.idx === _activeSubIdx) return;
                 if (_selectMode) toggleSelectMode();
@@ -417,6 +447,17 @@
             });
             nav.appendChild(btn);
         });
+        subpathSelect.innerHTML = '';
+        _subPaths.forEach((sp, idx) => {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            const icon = sp.type === 'lake' ? '🏞️' : '🏝️';
+            const label = (sp.type === 'lake' ? 'Lago ' : 'Isla ') + (idx + 1);
+            opt.textContent = icon + ' ' + label + ' (' + sp.verts.length + ' v)';
+            if (idx === _activeSubIdx) opt.selected = true;
+            subpathSelect.appendChild(opt);
+        });
+        subpathSelect.style.display = 'inline-block';
     }
 
     function getImageCoords(containerPoint) {
@@ -754,6 +795,8 @@
         document.getElementById('rb-select').style.display = mainLen > 0 ? 'inline-block' : 'none';
         document.getElementById('rb-add-island').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
         document.getElementById('rb-add-lake').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
+        document.getElementById('rb-delete-region').style.display = editingRegionName ? 'inline-block' : 'none';
+        document.getElementById('rb-delete-subpath').style.display = _activeSubIdx >= 0 ? 'inline-block' : 'none';
         const info = getActivePathInfo();
         if (_activeSubIdx >= 0) {
             document.getElementById('rb-status').textContent = `${info.label}: ${activeLen} vértices · [M]ain para volver`;
@@ -974,6 +1017,43 @@
         toggleSelectMode();
     }
 
+    function deleteActiveSubPath() {
+        if (_activeSubIdx < 0 || _activeSubIdx >= _subPaths.length) return;
+        const info = getActivePathInfo();
+        const label = info.type === 'lake' ? 'lago' : 'isla';
+        if (!confirm(`¿Eliminar este ${label}?`)) return;
+        _subPaths.splice(_activeSubIdx, 1);
+        _activeSubIdx = -1;
+        _regionUndoStack = [];
+        rebuildVertexMarkers();
+        rebuildRegionPreview();
+        updateRegionUI();
+        updatePathNav();
+    }
+
+    function deleteRegion() {
+        if (!editingRegionName) return;
+        const name = editingRegionName;
+        if (!confirm(`¿Eliminar la región "${name}" y todas sus fronteras?`)) return;
+        const idx = data.regions.findIndex(r => r.name === name);
+        if (idx === -1) return;
+        data.regions.splice(idx, 1);
+        sbDelete('regions', 'name', name);
+        rebuildSvgOverlay();
+        regionClear();
+        const sel = document.getElementById('rb-region-select');
+        sel.innerHTML = '<option value="">— Nueva región —</option>';
+        data.regions.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.name;
+            opt.textContent = r.name;
+            sel.appendChild(opt);
+        });
+        updateRegionUI();
+        updatePathNav();
+        document.getElementById('rb-status').textContent = `Región "${name}" eliminada ✅`;
+    }
+
     function rebuildSvgOverlay() {
         if (svgOverlayRef) { map.removeLayer(svgOverlayRef); svgOverlayRef = null; }
         if (data.regions && data.regions.length > 0) {
@@ -1067,6 +1147,8 @@
             document.getElementById('rb-add-lake').style.display = 'none';
             document.getElementById('rb-main').style.display = 'none';
             document.getElementById('rb-path-nav').style.display = 'none';
+            document.getElementById('rb-subpath-select').style.display = 'none';
+            highlightSubPath(-1, false);
             _subPaths = [];
             _activeSubIdx = -1;
             _subPolygons.forEach(p => map.removeLayer(p));
@@ -1145,6 +1227,21 @@
     document.getElementById('rb-add-island').addEventListener('click', () => startSubPath('island'));
     document.getElementById('rb-add-lake').addEventListener('click', () => startSubPath('lake'));
     document.getElementById('rb-main').addEventListener('click', switchToMainPath);
+    document.getElementById('rb-delete-region').addEventListener('click', deleteRegion);
+    document.getElementById('rb-delete-subpath').addEventListener('click', deleteActiveSubPath);
+    document.getElementById('rb-subpath-select').addEventListener('change', function () {
+        const val = this.value;
+        if (val === '' || val === null) return;
+        const idx = parseInt(val);
+        if (isNaN(idx) || idx === _activeSubIdx) return;
+        if (_selectMode) toggleSelectMode();
+        _activeSubIdx = idx;
+        _regionUndoStack = [];
+        rebuildVertexMarkers();
+        rebuildRegionPreview();
+        updateRegionUI();
+        updatePathNav();
+    });
 
     // ─── SISTEMA DE PINTURA ───
     let paintSystemReady = false;
@@ -1210,7 +1307,7 @@
 
         tempCanvas.style.display = 'block';
         tempCanvas.style.pointerEvents = 'auto';
-        tempCanvas.style.cursor = 'crosshair';
+        tempCanvas.style.cursor = 'none';
 
         map.dragging.disable();
         map.touchZoom.disable();
@@ -1340,6 +1437,7 @@
         }
 
         isPainting = true;
+        clearTempCanvas();
         const ip = screenToImage(sp.x, sp.y);
         paintPoints = [{ x: sp.x, y: sp.y }];
         paintImagePoints = [{ x: ip.x, y: ip.y }];
@@ -1358,52 +1456,86 @@
         tempCtx.globalCompositeOperation = 'source-over';
     }
 
-    function onPaintMouseMove(e) {
-        if (!paintMode || !isPainting) return;
-        const sp = getScreenPos(e);
-        const prev = paintPoints[paintPoints.length - 1];
-        const ip = screenToImage(sp.x, sp.y);
-
+    function drawBrushCursor(sp) {
+        clearTempCanvas();
         const sSize = getScreenBrushSize();
-        tempCtx.lineCap = 'round';
-        tempCtx.lineJoin = 'round';
-        tempCtx.lineWidth = sSize;
-        if (paintTool === 'eraser') {
-            tempCtx.globalCompositeOperation = 'destination-out';
-            tempCtx.strokeStyle = 'rgba(0,0,0,1)';
-        } else {
-            tempCtx.strokeStyle = paintColor;
-        }
+        const color = paintTool === 'eraser' ? 'rgba(255,255,255,0.6)' : paintColor;
         tempCtx.beginPath();
-        tempCtx.moveTo(prev.x, prev.y);
-        tempCtx.lineTo(sp.x, sp.y);
+        tempCtx.arc(sp.x, sp.y, sSize / 2, 0, Math.PI * 2);
+        tempCtx.strokeStyle = color;
+        tempCtx.lineWidth = 2;
+        if (tempCtx.setLineDash) tempCtx.setLineDash([4, 4]);
         tempCtx.stroke();
+        if (tempCtx.setLineDash) tempCtx.setLineDash([]);
         tempCtx.globalCompositeOperation = 'source-over';
-
-        paintPoints.push({ x: sp.x, y: sp.y });
-        paintImagePoints.push({ x: ip.x, y: ip.y });
     }
 
-    function onPaintMouseUp() {
+    function onPaintMouseMove(e) {
+        if (!paintMode) return;
+        const sp = getScreenPos(e);
+        if (isPainting) {
+            const prev = paintPoints[paintPoints.length - 1];
+            const ip = screenToImage(sp.x, sp.y);
+
+            const sSize = getScreenBrushSize();
+            tempCtx.lineCap = 'round';
+            tempCtx.lineJoin = 'round';
+            tempCtx.lineWidth = sSize;
+            if (paintTool === 'eraser') {
+                tempCtx.globalCompositeOperation = 'destination-out';
+                tempCtx.strokeStyle = 'rgba(0,0,0,1)';
+            } else {
+                tempCtx.strokeStyle = paintColor;
+            }
+            tempCtx.beginPath();
+            tempCtx.moveTo(prev.x, prev.y);
+            tempCtx.lineTo(sp.x, sp.y);
+            tempCtx.stroke();
+            tempCtx.globalCompositeOperation = 'source-over';
+
+            paintPoints.push({ x: sp.x, y: sp.y });
+            paintImagePoints.push({ x: ip.x, y: ip.y });
+        } else {
+            drawBrushCursor(sp);
+        }
+    }
+
+    function onPaintMouseUp(e) {
         if (!paintMode || !isPainting) return;
         isPainting = false;
 
         if (paintImagePoints.length > 0) {
+            if (paintTool === 'eraser') {
+                offscreenCtx.globalCompositeOperation = 'destination-out';
+            }
             offscreenCtx.lineCap = 'round';
             offscreenCtx.lineJoin = 'round';
             offscreenCtx.lineWidth = paintSize;
-            if (paintTool === 'eraser') {
-                offscreenCtx.globalCompositeOperation = 'destination-out';
-                offscreenCtx.strokeStyle = 'rgba(0,0,0,1)';
+
+            if (paintImagePoints.length === 1) {
+                const p = paintImagePoints[0];
+                const r = paintSize / 2;
+                offscreenCtx.beginPath();
+                offscreenCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                if (paintTool === 'eraser') {
+                    offscreenCtx.fillStyle = 'rgba(0,0,0,1)';
+                } else {
+                    offscreenCtx.fillStyle = paintColor;
+                }
+                offscreenCtx.fill();
             } else {
-                offscreenCtx.strokeStyle = paintColor;
+                if (paintTool === 'eraser') {
+                    offscreenCtx.strokeStyle = 'rgba(0,0,0,1)';
+                } else {
+                    offscreenCtx.strokeStyle = paintColor;
+                }
+                offscreenCtx.beginPath();
+                offscreenCtx.moveTo(paintImagePoints[0].x, paintImagePoints[0].y);
+                for (let i = 1; i < paintImagePoints.length; i++) {
+                    offscreenCtx.lineTo(paintImagePoints[i].x, paintImagePoints[i].y);
+                }
+                offscreenCtx.stroke();
             }
-            offscreenCtx.beginPath();
-            offscreenCtx.moveTo(paintImagePoints[0].x, paintImagePoints[0].y);
-            for (let i = 1; i < paintImagePoints.length; i++) {
-                offscreenCtx.lineTo(paintImagePoints[i].x, paintImagePoints[i].y);
-            }
-            offscreenCtx.stroke();
             offscreenCtx.globalCompositeOperation = 'source-over';
 
             const pts = paintImagePoints.map(p => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100]);
@@ -1418,6 +1550,8 @@
         clearTempCanvas();
         paintPoints = [];
         paintImagePoints = [];
+
+        if (e) drawBrushCursor(getScreenPos(e));
     }
 
     function paintUndo() {
@@ -1506,6 +1640,7 @@
     // ─── TOGGLES ───
     let hoverEnabled = true;
     let clickEnabled = true;
+    let markersVisible = true;
 
     function setHoverState(state) {
         hoverEnabled = state;
@@ -1549,6 +1684,20 @@
 
     document.getElementById('btn-toggle-all').addEventListener('click', toggleAll);
 
+    function setMarkersState(state) {
+        markersVisible = state;
+        const btn = document.getElementById('btn-toggle-markers');
+        btn.classList.toggle('off', !state);
+        btn.title = state ? 'Ocultar marcadores' : 'Mostrar marcadores';
+        if (state) {
+            layerGroup.addTo(map);
+        } else {
+            map.removeLayer(layerGroup);
+        }
+    }
+
+    document.getElementById('btn-toggle-markers').addEventListener('click', () => setMarkersState(!markersVisible));
+
     // ─── PANEL DE REGIÓN ───
     let activeRegion = null;
 
@@ -1562,6 +1711,7 @@
         document.getElementById('region-panel-read').style.display = inEdit ? 'none' : 'block';
         document.getElementById('region-panel-edit').style.display = inEdit ? 'block' : 'none';
         if (inEdit) {
+            document.getElementById('region-edit-name').value = region.name || '';
             document.getElementById('region-edit-desc').value = region.description || '';
             document.getElementById('region-edit-color').value = region.color || '#e94560';
             document.getElementById('region-edit-save').dataset.regionName = region.name;
@@ -1598,39 +1748,66 @@
     }
 
     function saveRegionEdit() {
-        const name = document.getElementById('region-edit-save').dataset.regionName;
-        if (!name) { alert('Error: no hay región seleccionada'); return; }
-        const region = data.regions.find(r => r.name === name);
-        if (!region) { alert('Error: región "' + name + '" no encontrada'); return; }
+        const oldName = document.getElementById('region-edit-save').dataset.regionName;
+        if (!oldName) { alert('Error: no hay región seleccionada'); return; }
+        const region = data.regions.find(r => r.name === oldName);
+        if (!region) { alert('Error: región "' + oldName + '" no encontrada'); return; }
 
+        const newName = document.getElementById('region-edit-name').value.trim();
+        if (!newName) { alert('El nombre es obligatorio'); return; }
         const desc = document.getElementById('region-edit-desc').value.trim();
         const color = document.getElementById('region-edit-color').value;
+
+        const nameChanged = newName !== oldName;
+
+        if (nameChanged) {
+            sbDelete('regions', 'name', oldName);
+            region.name = newName;
+            document.getElementById('region-edit-save').dataset.regionName = newName;
+        }
 
         region.description = desc;
         region.color = color;
 
         sbUpsert('regions', {
-            name, path: region.path, transform: region.transform, color, description: desc,
+            name: region.name, path: region.path, transform: region.transform, color, description: desc,
             extrapaths: region.extraPaths ? JSON.parse(JSON.stringify(region.extraPaths)) : []
         }, 'name');
 
         try { rebuildSvgOverlay(); } catch (e) { console.error('rebuild error:', e); alert('Error al reconstruir el mapa'); return; }
 
+        document.getElementById('region-panel-title').textContent = region.name;
         document.getElementById('region-panel-desc').textContent = desc;
+        document.getElementById('region-edit-save').dataset.regionName = region.name;
+        activeRegion = region.name;
 
-        // Keep highlight on the edited region
-        const sel = document.querySelector(`path[data-region="${name}"]:not([data-lake-edge])`);
+        const sel = document.querySelector(`path[data-region="${region.name}"]:not([data-lake-edge])`);
         if (sel) {
             sel.setAttribute('stroke', color);
             sel.setAttribute('stroke-width', '4');
             sel.setAttribute('fill', hexAlpha(color, 0.38));
             sel.setAttribute('filter', 'url(#region-glow)');
         }
-        const selLake = document.querySelector(`path[data-region="${name}"][data-lake-edge]`);
+        const selLake = document.querySelector(`path[data-region="${region.name}"][data-lake-edge]`);
         if (selLake) {
             selLake.setAttribute('stroke', color);
             selLake.setAttribute('stroke-width', '2');
         }
+
+        // Update region editor dropdown if open
+        const selDropdown = document.getElementById('rb-region-select');
+        if (selDropdown.style.display !== 'none' || regionEditMode) {
+            const currentVal = selDropdown.value;
+            selDropdown.innerHTML = '<option value="">— Nueva región —</option>';
+            data.regions.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.name;
+                opt.textContent = r.name;
+                if (r.name === region.name) opt.selected = true;
+                selDropdown.appendChild(opt);
+            });
+        }
+
         alert('Región guardada ✅');
     }
 
