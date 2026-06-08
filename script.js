@@ -782,6 +782,21 @@
         document.getElementById('rb-delete-tools').style.display = editingRegionName ? 'inline-block' : 'none';
         document.getElementById('rb-delete-subpath').style.display = _activeSubIdx >= 0 ? 'inline-block' : 'none';
         document.getElementById('rb-pick-subpath').style.display = (_activeSubIdx < 0 && _subPaths.length > 0) ? 'inline-block' : 'none';
+        // Absorb tool: visible when editing an existing region and there are other regions
+        const otherRegions = data.regions.filter(r => r.name !== editingRegionName);
+        document.getElementById('rb-absorb-tools').style.display = (editingRegionName && _activeSubIdx < 0 && otherRegions.length > 0) ? 'inline-block' : 'none';
+        if (otherRegions.length > 0) {
+            const sel = document.getElementById('rb-absorb-select');
+            const currentVal = sel.value;
+            sel.innerHTML = '<option value="">— Absorber región —</option>';
+            otherRegions.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.name;
+                opt.textContent = r.name;
+                if (r.name === currentVal) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
         const info = getActivePathInfo();
         if (_activeSubIdx >= 0) {
             document.getElementById('rb-status').textContent = `${info.label}: ${activeLen} vértices · [M]ain para volver`;
@@ -1056,6 +1071,74 @@
         document.getElementById('rb-status').textContent = `Región "${name}" eliminada ✅`;
     }
 
+    function absorbRegion(sourceName) {
+        if (!editingRegionName || sourceName === editingRegionName) return;
+        if (regionVerts.length > 0 && !confirm('¿Guardar los cambios actuales antes de absorber?')) return;
+        // Save current target first
+        if (regionVerts.length >= 3) regionSave();
+
+        const targetName = editingRegionName;
+        const targetIdx = data.regions.findIndex(r => r.name === targetName);
+        const sourceIdx = data.regions.findIndex(r => r.name === sourceName);
+        if (targetIdx === -1 || sourceIdx === -1) return;
+
+        const source = data.regions[sourceIdx];
+
+        // Convert source's main path to a territory extraPath
+        const sourceVerts = parseRegionPath(source);
+        const territoryPath = vertsToSvgPath(sourceVerts);
+
+        // Collect all extraPaths: source's main path + any existing source extraPaths
+        const newExtraPaths = [{ d: territoryPath.d, transform: territoryPath.transform, type: 'territory' }];
+        if (source.extraPaths) {
+            source.extraPaths.forEach(ep => {
+                if (ep.type === 'lake') {
+                    newExtraPaths.push({ d: ep.d, transform: ep.transform, type: 'lake' });
+                } else {
+                    newExtraPaths.push({ d: ep.d, transform: ep.transform, type: 'territory' });
+                }
+            });
+        }
+
+        // Merge with target's existing extraPaths
+        const target = data.regions[targetIdx];
+        const mergedExtra = target.extraPaths ? [...target.extraPaths, ...newExtraPaths] : newExtraPaths;
+
+        // Update target
+        target.extraPaths = mergedExtra;
+        data.regions[targetIdx] = target;
+
+        // Remove source
+        data.regions.splice(sourceIdx, 1);
+
+        // Save to Supabase
+        sbUpsert('regions', {
+            name: targetName, path: target.path, transform: target.transform,
+            color: target.color || '#e94560',
+            description: target.description || '',
+            extrapaths: mergedExtra
+        }, 'name');
+        sbDelete('regions', 'name', sourceName);
+
+        rebuildSvgOverlay();
+        // Reload editor with the updated target
+        const updated = data.regions.find(r => r.name === targetName);
+        if (updated) loadRegionVerts(updated);
+        // Refresh dropdown
+        const sel = document.getElementById('rb-region-select');
+        sel.innerHTML = '<option value="">— Nueva región —</option>';
+        data.regions.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.name; opt.textContent = r.name;
+            if (r.name === targetName) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        document.getElementById('rb-absorb-select').value = '';
+        updateRegionUI();
+        updatePathNav();
+        document.getElementById('rb-status').textContent = `"${sourceName}" absorbida como territorio de "${targetName}" ✅`;
+    }
+
     function rebuildSvgOverlay() {
         if (svgOverlayRef) { map.removeLayer(svgOverlayRef); svgOverlayRef = null; }
         if (data.regions && data.regions.length > 0) {
@@ -1153,6 +1236,7 @@
             document.getElementById('rb-pick-subpath').style.display = 'none';
             document.getElementById('rb-delete-tools').style.display = 'none';
             document.getElementById('rb-delete-region').style.display = 'none';
+            document.getElementById('rb-absorb-tools').style.display = 'none';
             if (_pickSubPathMode) togglePickSubPath();
             document.getElementById('rb-island-select').style.display = 'none';
             document.getElementById('rb-territory-select').style.display = 'none';
@@ -1338,6 +1422,16 @@
     });
     document.getElementById('rb-delete-region').addEventListener('click', deleteRegion);
     document.getElementById('rb-delete-subpath').addEventListener('click', deleteActiveSubPath);
+    document.getElementById('rb-absorb-btn').addEventListener('click', function() {
+        const sel = document.getElementById('rb-absorb-select');
+        sel.style.display = sel.style.display === 'none' ? 'inline-block' : 'none';
+    });
+    document.getElementById('rb-absorb-select').addEventListener('change', function() {
+        if (!this.value) return;
+        absorbRegion(this.value);
+        this.value = '';
+        this.style.display = 'none';
+    });
     function onSubpathSelectChange() {
         if (this.value === '' || this.value === null) return;
         const idx = parseInt(this.value);
