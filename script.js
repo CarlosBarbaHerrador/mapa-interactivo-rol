@@ -970,6 +970,7 @@
                 } catch (e) { alert('Error al guardar en Supabase: ' + e.message); }
                 rebuildSvgOverlay();
                 document.getElementById('rb-status').textContent = `"${editingRegionName}" guardada ✅`;
+                switchToMainPath();
             }
         } else {
             data.regions.push({
@@ -997,6 +998,7 @@
                 sel.appendChild(opt);
             });
             document.getElementById('rb-status').textContent = `"${nameTrim}" creada ✅`;
+            switchToMainPath();
         }
     }
 
