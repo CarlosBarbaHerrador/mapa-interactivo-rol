@@ -2330,6 +2330,7 @@
             if (bp) bp.style.display = 'inline-block';
             document.getElementById('btn-password').style.display = 'inline-block';
             document.getElementById('btn-sync').style.display = 'inline-block';
+            document.getElementById('btn-region-edit').style.display = 'inline-block';
 
             if (!getGitHubToken()) {
                 const token = prompt(
@@ -2355,8 +2356,10 @@
             if (bp2) bp2.style.display = 'none';
             document.getElementById('btn-password').style.display = 'none';
             document.getElementById('btn-sync').style.display = 'none';
+            document.getElementById('btn-region-edit').style.display = 'none';
             document.getElementById('sync-status').style.display = 'none';
             if (paintMode) exitPaintMode();
+            if (regionEditMode) toggleRegionEditMode();
             cancelPlacing();
             disableDragOnAll();
             closeModal();
