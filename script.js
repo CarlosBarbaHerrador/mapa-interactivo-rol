@@ -417,59 +417,27 @@
         });
     }
 
-    function subPathIcon(type) {
-        if (type === 'lake') return '🏞️';
-        if (type === 'territory') return '🗺️';
-        return '🏝️';
+    function populateSubSelect(selId, type) {
+        const sel = document.getElementById(selId);
+        sel.innerHTML = '<option value="">' + (type === 'island' ? '— Islas —' : type === 'territory' ? '— Territorios —' : '— Lagos —') + '</option>';
+        let added = 0;
+        _subPaths.forEach((sp, idx) => {
+            if (sp.type !== type) return;
+            added++;
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.textContent = subPathLabel(sp) + ' ' + added + ' (' + sp.verts.length + ' v)';
+            if (idx === _activeSubIdx) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        sel.style.display = added > 0 ? 'inline-block' : 'none';
     }
 
     function updatePathNav() {
         highlightSubPath(-1, false);
-        const nav = document.getElementById('rb-path-nav');
-        const subpathSelect = document.getElementById('rb-subpath-select');
-        nav.innerHTML = '';
-        const pills = [];
-        pills.push({ label: 'Main', idx: -1, active: _activeSubIdx === -1 });
-        _subPaths.forEach((sp, idx) => {
-            const icon = subPathIcon(sp.type);
-            const label = icon + ' ' + (idx + 1);
-            pills.push({ label, idx, active: idx === _activeSubIdx });
-        });
-        if (pills.length <= 1) {
-            nav.style.display = 'none';
-            subpathSelect.style.display = 'none';
-            return;
-        }
-        nav.style.display = 'inline-block';
-        pills.forEach(p => {
-            const btn = document.createElement('button');
-            btn.className = 'path-pill' + (p.active ? ' path-pill-active' : '');
-            btn.textContent = p.label;
-            btn.addEventListener('mouseenter', () => { if (!p.active) highlightSubPath(p.idx, true); });
-            btn.addEventListener('mouseleave', () => highlightSubPath(p.idx, false));
-            btn.addEventListener('click', () => {
-                if (p.idx === _activeSubIdx) return;
-                if (_selectMode) toggleSelectMode();
-                _activeSubIdx = p.idx;
-                _regionUndoStack = [];
-                rebuildVertexMarkers();
-                rebuildRegionPreview();
-                updateRegionUI();
-                updatePathNav();
-            });
-            nav.appendChild(btn);
-        });
-        subpathSelect.innerHTML = '';
-        _subPaths.forEach((sp, idx) => {
-            const opt = document.createElement('option');
-            opt.value = idx;
-            const icon = subPathIcon(sp.type);
-            const label = subPathLabel(sp) + ' ' + (idx + 1);
-            opt.textContent = icon + ' ' + label + ' (' + sp.verts.length + ' v)';
-            if (idx === _activeSubIdx) opt.selected = true;
-            subpathSelect.appendChild(opt);
-        });
-        subpathSelect.style.display = 'inline-block';
+        populateSubSelect('rb-island-select', 'island');
+        populateSubSelect('rb-territory-select', 'territory');
+        populateSubSelect('rb-lake-select', 'lake');
     }
 
     function getImageCoords(containerPoint) {
@@ -1176,8 +1144,9 @@
             document.getElementById('rb-add-territory').style.display = 'none';
             document.getElementById('rb-add-lake').style.display = 'none';
             document.getElementById('rb-main').style.display = 'none';
-            document.getElementById('rb-path-nav').style.display = 'none';
-            document.getElementById('rb-subpath-select').style.display = 'none';
+            document.getElementById('rb-island-select').style.display = 'none';
+            document.getElementById('rb-territory-select').style.display = 'none';
+            document.getElementById('rb-lake-select').style.display = 'none';
             highlightSubPath(-1, false);
             _subPaths = [];
             _activeSubIdx = -1;
@@ -1303,10 +1272,9 @@
     document.getElementById('rb-main').addEventListener('click', switchToMainPath);
     document.getElementById('rb-delete-region').addEventListener('click', deleteRegion);
     document.getElementById('rb-delete-subpath').addEventListener('click', deleteActiveSubPath);
-    document.getElementById('rb-subpath-select').addEventListener('change', function () {
-        const val = this.value;
-        if (val === '' || val === null) return;
-        const idx = parseInt(val);
+    function onSubpathSelectChange() {
+        if (this.value === '' || this.value === null) return;
+        const idx = parseInt(this.value);
         if (isNaN(idx) || idx === _activeSubIdx) return;
         if (_selectMode) toggleSelectMode();
         _activeSubIdx = idx;
@@ -1315,7 +1283,11 @@
         rebuildRegionPreview();
         updateRegionUI();
         updatePathNav();
-    });
+    }
+
+    document.getElementById('rb-island-select').addEventListener('change', onSubpathSelectChange);
+    document.getElementById('rb-territory-select').addEventListener('change', onSubpathSelectChange);
+    document.getElementById('rb-lake-select').addEventListener('change', onSubpathSelectChange);
 
     // ─── SISTEMA DE PINTURA ───
     let paintSystemReady = false;

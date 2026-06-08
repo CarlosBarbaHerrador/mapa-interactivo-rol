@@ -510,7 +510,7 @@ body {
     white-space: nowrap;
 }
 
-#rb-subpath-select {
+.rb-sub-select {
     background: #0a1628;
     color: #e0e0e0;
     border: 1px solid #3a5a7a;
@@ -522,7 +522,7 @@ body {
     outline: none;
     max-width: 140px;
 }
-#rb-subpath-select:focus {
+.rb-sub-select:focus {
     border-color: #e94560;
 }
 
