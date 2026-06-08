@@ -411,8 +411,9 @@
             const color = sp.type === 'lake' ? '#4488ff' : '#e94560';
             const poly = L.polygon(coords, {
                 color: color, weight: 2, fillColor: color, fillOpacity: sp.type === 'lake' ? 0 : 0.2,
-                interactive: false, dashArray: sp.type === 'lake' ? '' : ''
+                interactive: false
             }).addTo(map);
+            poly._subPathIdx = idx;
             _subPolygons.push(poly);
         });
     }
@@ -780,6 +781,7 @@
         document.getElementById('rb-add-lake').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
         document.getElementById('rb-delete-region').style.display = editingRegionName ? 'inline-block' : 'none';
         document.getElementById('rb-delete-subpath').style.display = _activeSubIdx >= 0 ? 'inline-block' : 'none';
+        document.getElementById('rb-pick-subpath').style.display = (_activeSubIdx < 0 && _subPaths.length > 0) ? 'inline-block' : 'none';
         const info = getActivePathInfo();
         if (_activeSubIdx >= 0) {
             document.getElementById('rb-status').textContent = `${info.label}: ${activeLen} vértices · [M]ain para volver`;
@@ -1144,6 +1146,8 @@
             document.getElementById('rb-add-territory').style.display = 'none';
             document.getElementById('rb-add-lake').style.display = 'none';
             document.getElementById('rb-main').style.display = 'none';
+            document.getElementById('rb-pick-subpath').style.display = 'none';
+            if (_pickSubPathMode) togglePickSubPath();
             document.getElementById('rb-island-select').style.display = 'none';
             document.getElementById('rb-territory-select').style.display = 'none';
             document.getElementById('rb-lake-select').style.display = 'none';
@@ -1212,6 +1216,57 @@
         updatePathNav();
     }
 
+    // ─── Seleccionar sub-path haciendo clic en el mapa ───
+    let _pickSubPathMode = false;
+
+    function togglePickSubPath() {
+        _pickSubPathMode = !_pickSubPathMode;
+        const btn = document.getElementById('rb-pick-subpath');
+        if (_pickSubPathMode) {
+            btn.style.background = '#4488ff';
+            btn.style.color = '#fff';
+            map.getContainer().style.cursor = 'pointer';
+            document.getElementById('rb-status').textContent = 'Haz clic en un territorio, isla o lago del mapa para editarlo';
+            _subPolygons.forEach(p => { try { map.removeLayer(p); } catch (e) {} });
+            _subPolygons = [];
+            _subPaths.forEach((sp, idx) => {
+                if (idx === _activeSubIdx || sp.verts.length < 3) return;
+                const coords = sp.verts.map(p => [p.y, p.x]);
+                coords.push(coords[0]);
+                const color = sp.type === 'lake' ? '#4488ff' : '#e94560';
+                const poly = L.polygon(coords, {
+                    color: '#fff', weight: 3, fillColor: color, fillOpacity: 0.35,
+                    interactive: true
+                }).addTo(map);
+                poly._subPathIdx = idx;
+                poly.on('click', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    const targetIdx = e.target._subPathIdx;
+                    if (targetIdx === undefined || targetIdx === _activeSubIdx) return;
+                    _activeSubIdx = targetIdx;
+                    _regionUndoStack = [];
+                    rebuildVertexMarkers();
+                    rebuildRegionPreview();
+                    updateRegionUI();
+                    updatePathNav();
+                    togglePickSubPath();
+                });
+                _subPolygons.push(poly);
+            });
+            map.on('click', () => { if (_pickSubPathMode) togglePickSubPath(); });
+        } else {
+            btn.style.background = '';
+            btn.style.color = '';
+            map.getContainer().style.cursor = 'crosshair';
+            map.off('click');
+            map.on('click', onRegionMapClick);
+            map.on('mousemove', onRegionMapMove);
+            document.getElementById('rb-status').textContent = 'Haz clic en el mapa para añadir vértices';
+            rebuildSubPolygons();
+            rebuildRegionPreview();
+        }
+    }
+
     // ─── Ctrl+drag y WASD en editor de fronteras ───
     function setCtrlPan(ctrl) {
         if (!regionEditMode) return;
@@ -1270,6 +1325,7 @@
     document.getElementById('rb-add-territory').addEventListener('click', () => startSubPath('territory'));
     document.getElementById('rb-add-lake').addEventListener('click', () => startSubPath('lake'));
     document.getElementById('rb-main').addEventListener('click', switchToMainPath);
+    document.getElementById('rb-pick-subpath').addEventListener('click', togglePickSubPath);
     document.getElementById('rb-delete-region').addEventListener('click', deleteRegion);
     document.getElementById('rb-delete-subpath').addEventListener('click', deleteActiveSubPath);
     function onSubpathSelectChange() {
