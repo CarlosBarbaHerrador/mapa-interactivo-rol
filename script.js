@@ -716,6 +716,8 @@
     let _selectedVerts = new Set();
     let _regionUndoStack = [];
     const REGION_UNDO_MAX = 50;
+    let _ctrlHeld = false;
+    let _wasdInterval = null;
 
     function regionPushHistory() {
         const verts = getActiveVerts();
@@ -857,6 +859,7 @@
 
     function onRegionMapClick(e) {
         if (!regionEditMode) return;
+        if (_ctrlHeld) return;
         if (_selectMode) { toggleSelectMode(); return; }
         if (e.originalEvent && e.originalEvent.button !== 0) return;
         const now = Date.now();
@@ -1227,6 +1230,47 @@
         updateRegionUI();
         updatePathNav();
     }
+
+    // ─── Ctrl+drag y WASD en editor de fronteras ───
+    function setCtrlPan(ctrl) {
+        if (!regionEditMode) return;
+        _ctrlHeld = ctrl;
+        if (ctrl) {
+            map.dragging.enable();
+            map.getContainer().style.cursor = 'grab';
+            document.getElementById('rb-status').textContent = '🖱️ Arrastra para mover el mapa';
+        } else {
+            map.dragging.disable();
+            map.getContainer().style.cursor = 'crosshair';
+            const activeLen = getActiveVerts().length;
+            if (activeLen > 0) {
+                document.getElementById('rb-status').textContent = activeLen + ' vértices';
+            } else {
+                document.getElementById('rb-status').textContent = 'Haz clic en el mapa para añadir vértices';
+            }
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (!regionEditMode) return;
+        if (e.key === 'Control') { e.preventDefault(); setCtrlPan(true); return; }
+        if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'SELECT')) return;
+        const step = 30;
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
+            e.preventDefault();
+            let dx = 0, dy = 0;
+            if (key === 'a') dx = step;
+            if (key === 'd') dx = -step;
+            if (key === 'w') dy = step;
+            if (key === 's') dy = -step;
+            map.panBy([dx, dy], { animate: false });
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if (e.key === 'Control') setCtrlPan(false);
+    });
 
     document.getElementById('btn-region-edit').addEventListener('click', toggleRegionEditMode);
     document.getElementById('rb-region-select').addEventListener('change', function () {
