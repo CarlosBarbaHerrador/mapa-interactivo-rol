@@ -968,10 +968,9 @@
                         extrapaths: extraPaths.length > 0 ? JSON.parse(JSON.stringify(extraPaths)) : []
                     }, 'name');
                 } catch (e) { alert('Error al guardar en Supabase: ' + e.message); }
-                alert(`Frontera de "${editingRegionName}" actualizada ✅`);
                 rebuildSvgOverlay();
+                document.getElementById('rb-status').textContent = `"${editingRegionName}" guardada ✅`;
             }
-            toggleRegionEditMode();
         } else {
             data.regions.push({
                 name: nameTrim, path: main.d,
@@ -986,7 +985,18 @@
                 }, 'name');
             } catch (e) { alert('Error al guardar en Supabase: ' + e.message); }
             rebuildSvgOverlay();
-            toggleRegionEditMode();
+            // Select the new region in dropdown
+            editingRegionName = nameTrim;
+            const sel = document.getElementById('rb-region-select');
+            sel.innerHTML = '<option value="">— Nueva región —</option>';
+            data.regions.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.name;
+                opt.textContent = r.name;
+                if (r.name === nameTrim) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            document.getElementById('rb-status').textContent = `"${nameTrim}" creada ✅`;
         }
     }
 
