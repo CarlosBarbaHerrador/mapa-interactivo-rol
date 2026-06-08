@@ -65,7 +65,10 @@
         <button id="rb-delete-selected" class="btn-sm" style="display:none;background:#6b1a1a;color:#ffb0b0">🗑️ Borrar (0)</button>
         <button id="rb-clear" class="btn-sm" style="display:none">🗑️ Todo</button>
         <button id="rb-save" class="btn-sm btn-primary" style="display:none">💾 Guardar</button>
-        <button id="rb-delete-region" class="btn-sm" style="display:none;background:#6b1a1a;color:#ffb0b0">🗑️ Eliminar región</button>
+        <span id="rb-delete-tools" style="display:none;position:relative">
+            <button id="rb-delete-region-btn" class="btn-sm" title="Opciones de borrado" style="background:#3a2a2a;color:#aa7070">🗑️</button>
+            <button id="rb-delete-region" class="btn-sm" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:#6b1a1a;color:#ffb0b0;white-space:nowrap;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.5)">🗑️ Eliminar región</button>
+        </span>
         <button id="rb-add-island" class="btn-sm" style="display:none">🏝️ +Isla</button>
         <button id="rb-add-territory" class="btn-sm" style="display:none">🗺️ +Territorio</button>
         <button id="rb-add-lake" class="btn-sm" style="display:none">🏞️ +Lago</button>

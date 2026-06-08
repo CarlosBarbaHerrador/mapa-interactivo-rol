@@ -779,7 +779,7 @@
         document.getElementById('rb-add-island').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
         document.getElementById('rb-add-territory').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
         document.getElementById('rb-add-lake').style.display = (_activeSubIdx < 0 && mainLen >= 3) ? 'inline-block' : 'none';
-        document.getElementById('rb-delete-region').style.display = editingRegionName ? 'inline-block' : 'none';
+        document.getElementById('rb-delete-tools').style.display = editingRegionName ? 'inline-block' : 'none';
         document.getElementById('rb-delete-subpath').style.display = _activeSubIdx >= 0 ? 'inline-block' : 'none';
         document.getElementById('rb-pick-subpath').style.display = (_activeSubIdx < 0 && _subPaths.length > 0) ? 'inline-block' : 'none';
         const info = getActivePathInfo();
@@ -1032,13 +1032,17 @@
     function deleteRegion() {
         if (!editingRegionName) return;
         const name = editingRegionName;
-        if (!confirm(`¿Eliminar la región "${name}" y todas sus fronteras?`)) return;
+        if (!confirm(`⚠️ ¿Estás seguro de eliminar "${name}" y todas sus fronteras?`)) return;
+        if (!confirm(`⚠️⚠️ ¿Segurísimo? "${name}" desaparecerá del mapa para siempre.`)) return;
+        const typed = prompt(`⚠️⚠️⚠️ Escribe exactamente "${name}" para confirmar la eliminación definitiva:`);
+        if (typed !== name) { alert('Cancelado: el nombre no coincide.'); return; }
         const idx = data.regions.findIndex(r => r.name === name);
         if (idx === -1) return;
         data.regions.splice(idx, 1);
         sbDelete('regions', 'name', name);
         rebuildSvgOverlay();
         regionClear();
+        document.getElementById('rb-delete-region').style.display = 'none';
         const sel = document.getElementById('rb-region-select');
         sel.innerHTML = '<option value="">— Nueva región —</option>';
         data.regions.forEach(r => {
@@ -1147,6 +1151,8 @@
             document.getElementById('rb-add-lake').style.display = 'none';
             document.getElementById('rb-main').style.display = 'none';
             document.getElementById('rb-pick-subpath').style.display = 'none';
+            document.getElementById('rb-delete-tools').style.display = 'none';
+            document.getElementById('rb-delete-region').style.display = 'none';
             if (_pickSubPathMode) togglePickSubPath();
             document.getElementById('rb-island-select').style.display = 'none';
             document.getElementById('rb-territory-select').style.display = 'none';
@@ -1326,6 +1332,10 @@
     document.getElementById('rb-add-lake').addEventListener('click', () => startSubPath('lake'));
     document.getElementById('rb-main').addEventListener('click', switchToMainPath);
     document.getElementById('rb-pick-subpath').addEventListener('click', togglePickSubPath);
+    document.getElementById('rb-delete-region-btn').addEventListener('click', function () {
+        const btn = document.getElementById('rb-delete-region');
+        btn.style.display = btn.style.display === 'none' ? 'inline-block' : 'none';
+    });
     document.getElementById('rb-delete-region').addEventListener('click', deleteRegion);
     document.getElementById('rb-delete-subpath').addEventListener('click', deleteActiveSubPath);
     function onSubpathSelectChange() {
