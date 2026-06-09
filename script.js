@@ -67,11 +67,13 @@
         const allPaths = [{ d: region.path, transform: region.transform, type: 'main' }];
         if (region.extraPaths) allPaths.push(...region.extraPaths);
 
-        // ── Land group (masked) ──
-        const landG = document.createElementNS(svgNS, 'g');
-        const landPaths = allPaths.filter(p => p.type !== 'lake');
+        // ── Separate paths ──
+        const mainPaths = allPaths.filter(p => p.type === 'main' || p.type === 'territory');
+        const islands = allPaths.filter(p => p.type === 'island');
         const lakes = allPaths.filter(p => p.type === 'lake');
 
+        // ── Main land group (masked by lakes) ──
+        const landG = document.createElementNS(svgNS, 'g');
         if (lakes.length > 0) {
             const maskId = 'mask-' + region.name.replace(/\s+/g, '_');
             const mask = document.createElementNS(svgNS, 'mask');
@@ -92,10 +94,10 @@
             (outerG._defs || (outerG._defs = [])).push(mask);
         }
 
-        landPaths.forEach(ap => {
+        function createPathEl(d, transform) {
             const path = document.createElementNS(svgNS, 'path');
-            path.setAttribute('d', ap.d);
-            if (ap.transform) path.setAttribute('transform', ap.transform);
+            path.setAttribute('d', d);
+            if (transform) path.setAttribute('transform', transform);
             path.setAttribute('data-region', region.name);
             path.setAttribute('fill', hexAlpha(rc, 0.1));
             path.setAttribute('stroke', BOUNDARY_STROKE);
@@ -105,8 +107,10 @@
             path.style.pointerEvents = 'auto';
             path.style.cursor = 'pointer';
             path.style.transition = 'all 0.2s ease';
-            landG.appendChild(path);
-        });
+            return path;
+        }
+
+        mainPaths.concat(islands).forEach(ap => landG.appendChild(createPathEl(ap.d, ap.transform)));
         outerG.appendChild(landG);
 
         // ── Lake‑edge group (unmasked, visible only on hover) ──
