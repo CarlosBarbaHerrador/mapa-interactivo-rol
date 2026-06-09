@@ -1690,6 +1690,15 @@
             tempCtx.stroke();
             tempCtx.globalCompositeOperation = 'source-over';
 
+            // Draw cursor outline on top
+            tempCtx.beginPath();
+            tempCtx.arc(sp.x, sp.y, sSize / 2, 0, Math.PI * 2);
+            tempCtx.strokeStyle = '#000000';
+            tempCtx.lineWidth = 2;
+            if (tempCtx.setLineDash) tempCtx.setLineDash([4, 4]);
+            tempCtx.stroke();
+            if (tempCtx.setLineDash) tempCtx.setLineDash([]);
+
             paintPoints.push({ x: sp.x, y: sp.y });
             paintImagePoints.push({ x: ip.x, y: ip.y });
         } else {
