@@ -1724,30 +1724,27 @@
 
             if (paintImagePoints.length === 1) {
                 const p = paintImagePoints[0];
-                const x = Math.round(p.x);
-                const y = Math.round(p.y);
-                if (paintSize <= 1) {
-                    offscreenCtx.fillStyle = paintTool === 'eraser' ? 'rgba(0,0,0,1)' : paintColor;
-                    offscreenCtx.fillRect(x, y, 1, 1);
+                const r = paintSize / 2;
+                offscreenCtx.beginPath();
+                offscreenCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                if (paintTool === 'eraser') {
+                    offscreenCtx.fillStyle = 'rgba(0,0,0,1)';
                 } else {
-                    offscreenCtx.beginPath();
-                    offscreenCtx.arc(x, y, paintSize / 2, 0, Math.PI * 2);
-                    offscreenCtx.fillStyle = paintTool === 'eraser' ? 'rgba(0,0,0,1)' : paintColor;
-                    offscreenCtx.fill();
+                    offscreenCtx.fillStyle = paintColor;
                 }
+                offscreenCtx.fill();
             } else {
                 if (paintTool === 'eraser') {
-                    offscreenCtx.globalCompositeOperation = 'destination-out';
+                    offscreenCtx.strokeStyle = 'rgba(0,0,0,1)';
+                } else {
+                    offscreenCtx.strokeStyle = paintColor;
                 }
-                offscreenCtx.fillStyle = paintColor;
-                for (const pt of paintImagePoints) {
-                    const x = Math.round(pt.x);
-                    const y = Math.round(pt.y);
-                    offscreenCtx.beginPath();
-                    offscreenCtx.arc(x, y, paintSize / 2, 0, Math.PI * 2);
-                    offscreenCtx.fill();
+                offscreenCtx.beginPath();
+                offscreenCtx.moveTo(paintImagePoints[0].x, paintImagePoints[0].y);
+                for (let i = 1; i < paintImagePoints.length; i++) {
+                    offscreenCtx.lineTo(paintImagePoints[i].x, paintImagePoints[i].y);
                 }
-                offscreenCtx.globalCompositeOperation = 'source-over';
+                offscreenCtx.stroke();
             }
             offscreenCtx.globalCompositeOperation = 'source-over';
 
@@ -1798,22 +1795,21 @@
         const lineStrokes = strokes.filter(s => s.tool !== 'fill');
 
         for (const s of lineStrokes) {
-            const size = s.size || 8;
+            offscreenCtx.lineCap = 'round';
+            offscreenCtx.lineJoin = 'round';
+            offscreenCtx.lineWidth = s.size || 8;
             if (s.tool === 'eraser') {
                 offscreenCtx.globalCompositeOperation = 'destination-out';
+                offscreenCtx.strokeStyle = 'rgba(0,0,0,1)';
+            } else {
+                offscreenCtx.strokeStyle = s.color;
             }
-            offscreenCtx.fillStyle = s.color;
-            for (const pt of s.points) {
-                const x = Math.round(pt[0]);
-                const y = Math.round(pt[1]);
-                if (size <= 1) {
-                    offscreenCtx.fillRect(x, y, 1, 1);
-                } else {
-                    offscreenCtx.beginPath();
-                    offscreenCtx.arc(x, y, size / 2, 0, Math.PI * 2);
-                    offscreenCtx.fill();
-                }
+            offscreenCtx.beginPath();
+            offscreenCtx.moveTo(s.points[0][0], s.points[0][1]);
+            for (let i = 1; i < s.points.length; i++) {
+                offscreenCtx.lineTo(s.points[i][0], s.points[i][1]);
             }
+            offscreenCtx.stroke();
             offscreenCtx.globalCompositeOperation = 'source-over';
         }
 
