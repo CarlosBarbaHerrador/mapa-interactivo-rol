@@ -110,8 +110,13 @@
             return path;
         }
 
-        mainPaths.concat(islands).forEach(ap => landG.appendChild(createPathEl(ap.d, ap.transform)));
+        mainPaths.forEach(ap => landG.appendChild(createPathEl(ap.d, ap.transform)));
         outerG.appendChild(landG);
+
+        // ── Island group (unmasked, visible inside lakes) ──
+        const islandG = document.createElementNS(svgNS, 'g');
+        islands.forEach(ap => islandG.appendChild(createPathEl(ap.d, ap.transform)));
+        outerG.appendChild(islandG);
 
         // ── Lake‑edge group (unmasked, visible only on hover) ──
         const lakeEdgeG = document.createElementNS(svgNS, 'g');
@@ -132,8 +137,9 @@
 
         // ── Highlight ──
         let _gHighlighted = false;
+        const allHighlightPaths = () => outerG.querySelectorAll('path:not([data-lake-edge])');
         const highlightGroup = (on) => {
-            landG.querySelectorAll('path').forEach(p => {
+            allHighlightPaths().forEach(p => {
                 if (on) {
                     p.setAttribute('stroke', rc);
                     p.setAttribute('stroke-width', '4');
