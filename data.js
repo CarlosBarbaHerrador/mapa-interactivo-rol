@@ -57,6 +57,16 @@ const MAP_DATA = {
             "label": "Tiendas",
             "icon": "🛒",
             "color": "#f1c40f"
+        },
+        "fort": {
+            "label": "Fuertes",
+            "icon": "🛡️",
+            "color": "#cd5c5c"
+        },
+        "castle": {
+            "label": "Castillos",
+            "icon": "🏯",
+            "color": "#8B4513"
         }
     },
     "regions": [
