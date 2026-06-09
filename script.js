@@ -251,6 +251,7 @@
                     if (!markers[poi.id]) addMarkerFromData(poi);
                 });
                 updateCounter();
+                resetIdCounter();
             }
 
             if (ptRes.data && ptRes.data.length > 0) {
@@ -2070,6 +2071,14 @@
     const markers = {};
     const layerGroup = L.layerGroup().addTo(map);
     let idCounter = 1;
+    function resetIdCounter() {
+        let max = 0;
+        Object.keys(markers).forEach(k => {
+            const m = k.match(/^m(\d+)$/);
+            if (m) max = Math.max(max, parseInt(m[1], 10));
+        });
+        idCounter = max + 1;
+    }
     let editingId = null;
 
     // ─── PERSISTENCIA ───
@@ -2222,6 +2231,7 @@
     if (Object.keys(markers).length === 0) {
         data.pois.forEach(poi => addMarkerFromData(poi));
     }
+    resetIdCounter();
 
     function addMarkerFromData(poi) {
         const id = poi.id || 'm' + (idCounter++);
@@ -2257,7 +2267,8 @@
 
     // ─── AÑADIR MARCADOR ───
     function addNewMarker(latlng) {
-        const id = 'm' + (idCounter++);
+        let id = 'm' + (idCounter++);
+        while (markers[id]) id = 'm' + (idCounter++);
         const poi = {
             id, name: 'Nuevo punto', type: 'city',
             color: '#e94560', region: '',
