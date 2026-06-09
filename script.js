@@ -246,10 +246,10 @@
                     coords: r.coords, description: r.description || '',
                     links: r.links || []
                 }));
-                // Reload POI markers
-                Object.keys(markers).forEach(k => layerGroup.removeLayer(markers[k].marker));
-                Object.keys(markers).forEach(k => delete markers[k]);
-                data.pois.forEach(poi => addMarkerFromData(poi));
+                // Only add NEW POIs from Supabase, never remove existing ones
+                data.pois.forEach(poi => {
+                    if (!markers[poi.id]) addMarkerFromData(poi);
+                });
                 updateCounter();
             }
 
