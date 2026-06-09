@@ -25,12 +25,12 @@ const MAP_DATA = {
         },
         "city": {
             "label": "Ciudades",
-            "icon": "🏰",
+            "icon": "🏘️",
             "color": "#e94560"
         },
         "town": {
             "label": "Pueblos",
-            "icon": "🏘️",
+            "icon": "🏠",
             "color": "#f5a623"
         },
         "dungeon": {
@@ -60,12 +60,12 @@ const MAP_DATA = {
         },
         "fort": {
             "label": "Fuertes",
-            "icon": "🛡️",
+            "icon": "🏯",
             "color": "#cd5c5c"
         },
         "castle": {
             "label": "Castillos",
-            "icon": "🏯",
+            "icon": "🏰",
             "color": "#8B4513"
         }
     },
