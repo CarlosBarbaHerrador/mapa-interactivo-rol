@@ -2308,7 +2308,7 @@
     }
 
     // ─── GUARDAR ───
-    function saveModal() {
+    async function saveModal() {
         const id = document.getElementById('edit-id').value;
         const entry = markers[id];
         if (!entry) return;
@@ -2332,12 +2332,16 @@
         entry.poi.coords = coords;
         entry.poi.links = linkUrl ? [{ text: linkText || '🔗 Enlace', url: linkUrl }] : [];
 
-        // Save to Supabase
-        sbUpsert('pois', {
-            id, name, category: type, color, region,
-            coords: coords, description: desc,
-            links: entry.poi.links.length > 0 ? entry.poi.links : []
-        }, 'id');
+        // Save to Supabase (await so realtime reload sees the committed data)
+        try {
+            await sbUpsert('pois', {
+                id, name, category: type, color, region,
+                coords: coords, description: desc,
+                links: entry.poi.links.length > 0 ? entry.poi.links : []
+            }, 'id');
+        } catch (e) {
+            console.warn('Error saving POI to Supabase:', e);
+        }
 
         const cat = data.categories[type];
         entry.marker.setIcon(createIcon(type, color));
