@@ -1671,10 +1671,11 @@
         if (!paintMode) return;
         const sp = getScreenPos(e);
         if (isPainting) {
-            const prev = paintPoints[paintPoints.length - 1];
             const ip = screenToImage(sp.x, sp.y);
-
             const sSize = getScreenBrushSize();
+
+            // Redraw all paint points + cursor to avoid trails
+            clearTempCanvas();
             tempCtx.lineCap = 'round';
             tempCtx.lineJoin = 'round';
             tempCtx.lineWidth = sSize;
@@ -1685,7 +1686,10 @@
                 tempCtx.strokeStyle = paintColor;
             }
             tempCtx.beginPath();
-            tempCtx.moveTo(prev.x, prev.y);
+            tempCtx.moveTo(paintPoints[0].x, paintPoints[0].y);
+            for (let i = 1; i < paintPoints.length; i++) {
+                tempCtx.lineTo(paintPoints[i].x, paintPoints[i].y);
+            }
             tempCtx.lineTo(sp.x, sp.y);
             tempCtx.stroke();
             tempCtx.globalCompositeOperation = 'source-over';
