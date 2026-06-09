@@ -661,28 +661,10 @@
         }).addTo(map);
         regionPolygon.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
-            if (e.originalEvent && e.originalEvent.shiftKey) {
-                // Shift+Click: insert vertex at nearest edge
-                const n = verts.length;
-                let best = -1, bestDist = Infinity;
-                for (let i = 0; i < n; i++) {
-                    const j = (i + 1) % n;
-                    const d = distToSegment(e.latlng.lng, e.latlng.lat,
-                        verts[i].x, verts[i].y,
-                        verts[j].x, verts[j].y);
-                    if (d < bestDist) { bestDist = d; best = i; }
-                }
-                regionPushHistory();
-                const current = getActiveVerts();
-                current.splice(best + 1, 0, { x: e.latlng.lng, y: e.latlng.lat });
-                setActiveVerts(current);
-            } else {
-                // Normal click: append vertex at the end
-                regionPushHistory();
-                const current = getActiveVerts();
-                current.push({ x: e.latlng.lng, y: e.latlng.lat });
-                setActiveVerts(current);
-            }
+            regionPushHistory();
+            const current = getActiveVerts();
+            current.push({ x: e.latlng.lng, y: e.latlng.lat });
+            setActiveVerts(current);
             rebuildVertexMarkers();
             rebuildRegionPreview();
             updateRegionUI();
@@ -1674,7 +1656,7 @@
     function drawBrushCursor(sp) {
         clearTempCanvas();
         const sSize = getScreenBrushSize();
-        const color = paintTool === 'eraser' ? 'rgba(255,255,255,0.6)' : paintColor;
+        const color = '#000000';
         tempCtx.beginPath();
         tempCtx.arc(sp.x, sp.y, sSize / 2, 0, Math.PI * 2);
         tempCtx.strokeStyle = color;
