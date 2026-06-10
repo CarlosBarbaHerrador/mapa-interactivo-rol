@@ -1882,7 +1882,7 @@
     }
 
     // ─── TOGGLES ───
-    let hoverEnabled = true;
+    let hoverEnabled = false;
     let clickEnabled = true;
     let markersVisible = true;
 
@@ -1914,6 +1914,9 @@
         if (!state && activeRegion) closeRegionPanel();
     }
 
+    // Initialize hover button state (default off)
+    document.getElementById('btn-toggle-hover').classList.add('off');
+    document.getElementById('btn-toggle-hover').title = 'Activar bordes al pasar el ratón';
     document.getElementById('btn-toggle-hover').addEventListener('click', () => setHoverState(!hoverEnabled));
     document.getElementById('btn-toggle-click').addEventListener('click', () => setClickState(!clickEnabled));
 
