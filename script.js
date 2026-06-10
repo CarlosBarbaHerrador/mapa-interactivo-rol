@@ -1319,6 +1319,8 @@
             btn.style.color = '#fff';
             map.getContainer().style.cursor = 'pointer';
             document.getElementById('rb-status').textContent = 'Haz clic en un territorio, isla o lago del mapa para editarlo';
+            // Remove vertex‑adding handler so only pick logic runs
+            map.off('click', onRegionMapClick);
             _subPolygons.forEach(p => { try { map.removeLayer(p); } catch (e) {} });
             _subPolygons = [];
             _subPaths.forEach((sp, idx) => {
