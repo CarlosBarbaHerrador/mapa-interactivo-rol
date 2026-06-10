@@ -1564,7 +1564,7 @@
         const btn = document.getElementById('paint-tool-' + paintTool);
         if (btn) btn.classList.add('btn-primary');
         document.getElementById('paint-size-val').textContent = paintSize;
-        document.getElementById('paint-opacity-val').textContent = Math.round(paintOpacity * 100) + '%';
+        document.getElementById('paint-opacity-val').textContent = document.getElementById('paint-opacity').value + '%';
     }
 
     function getScreenPos(e) {
@@ -1873,8 +1873,9 @@
         });
         document.getElementById('paint-color').addEventListener('input', (e) => { paintColor = e.target.value; });
         document.getElementById('paint-opacity').addEventListener('input', (e) => {
-            paintOpacity = parseInt(e.target.value) / 100;
-            document.getElementById('paint-opacity-val').textContent = Math.round(paintOpacity * 100) + '%';
+            const v = parseInt(e.target.value);
+            paintOpacity = v <= 50 ? v / 50 : 1;
+            document.getElementById('paint-opacity-val').textContent = v + '%';
         });
         document.getElementById('paint-undo').addEventListener('click', paintUndo);
         document.getElementById('paint-exit').addEventListener('click', exitPaintMode);
