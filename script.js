@@ -1459,6 +1459,7 @@
     let paintTool = 'brush';
     let paintColor = '#e94560';
     let paintSize = 8;
+    let paintOpacity = 1.0;
     let isPainting = false;
     let paintPoints = [];
     let paintImagePoints = [];
@@ -1563,6 +1564,7 @@
         const btn = document.getElementById('paint-tool-' + paintTool);
         if (btn) btn.classList.add('btn-primary');
         document.getElementById('paint-size-val').textContent = paintSize;
+        document.getElementById('paint-opacity-val').textContent = Math.round(paintOpacity * 100) + '%';
     }
 
     function getScreenPos(e) {
@@ -1608,12 +1610,13 @@
                 const ty = m ? parseFloat(m[2]) : 0;
                 const path = new Path2D(region.path);
                 offscreenCtx.save();
+                offscreenCtx.globalAlpha = paintOpacity;
                 offscreenCtx.translate(tx, ty);
                 offscreenCtx.fillStyle = paintColor;
                 offscreenCtx.fill(path);
                 offscreenCtx.restore();
                 updatePaintOverlay();
-                data.paint.push({ tool: 'fill', color: paintColor, region: region.name });
+                data.paint.push({ tool: 'fill', color: paintColor, region: region.name, opacity: paintOpacity });
                 sbSavePaint();
             }
             return;
@@ -1660,9 +1663,11 @@
             tempCtx.globalCompositeOperation = 'destination-out';
             tempCtx.fillStyle = 'rgba(0,0,0,1)';
         } else {
+            tempCtx.globalAlpha = paintOpacity;
             tempCtx.fillStyle = paintColor;
         }
         tempCtx.fill();
+        tempCtx.globalAlpha = 1;
         tempCtx.globalCompositeOperation = 'source-over';
     }
 
@@ -1696,6 +1701,7 @@
                 tempCtx.globalCompositeOperation = 'destination-out';
                 tempCtx.strokeStyle = 'rgba(0,0,0,1)';
             } else {
+                tempCtx.globalAlpha = paintOpacity;
                 tempCtx.strokeStyle = paintColor;
             }
             tempCtx.beginPath();
@@ -1705,6 +1711,7 @@
             }
             tempCtx.lineTo(sp.x, sp.y);
             tempCtx.stroke();
+            tempCtx.globalAlpha = 1;
             tempCtx.globalCompositeOperation = 'source-over';
 
             // Draw cursor outline on top
@@ -1730,6 +1737,8 @@
         if (paintImagePoints.length > 0) {
             if (paintTool === 'eraser') {
                 offscreenCtx.globalCompositeOperation = 'destination-out';
+            } else {
+                offscreenCtx.globalAlpha = paintOpacity;
             }
             offscreenCtx.lineCap = 'round';
             offscreenCtx.lineJoin = 'round';
@@ -1737,20 +1746,22 @@
 
             if (paintImagePoints.length === 1) {
                 const p = paintImagePoints[0];
-                const r = paintSize / 2;
-                offscreenCtx.beginPath();
-                offscreenCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                const x = Math.round(p.x);
+                const y = Math.round(p.y);
+                if (paintSize <= 1) {
+                    offscreenCtx.fillStyle = paintTool === 'eraser' ? 'rgba(0,0,0,1)' : paintColor;
+                    offscreenCtx.fillRect(x, y, 1, 1);
+                } else {
+                    offscreenCtx.beginPath();
+                    offscreenCtx.arc(x, y, paintSize / 2, 0, Math.PI * 2);
+                    offscreenCtx.fillStyle = paintTool === 'eraser' ? 'rgba(0,0,0,1)' : paintColor;
+                    offscreenCtx.fill();
+                }
+            } else {
                 if (paintTool === 'eraser') {
                     offscreenCtx.fillStyle = 'rgba(0,0,0,1)';
                 } else {
                     offscreenCtx.fillStyle = paintColor;
-                }
-                offscreenCtx.fill();
-            } else {
-                if (paintTool === 'eraser') {
-                    offscreenCtx.strokeStyle = 'rgba(0,0,0,1)';
-                } else {
-                    offscreenCtx.strokeStyle = paintColor;
                 }
                 offscreenCtx.beginPath();
                 offscreenCtx.moveTo(paintImagePoints[0].x, paintImagePoints[0].y);
@@ -1759,11 +1770,12 @@
                 }
                 offscreenCtx.stroke();
             }
+            offscreenCtx.globalAlpha = 1;
             offscreenCtx.globalCompositeOperation = 'source-over';
 
             const pts = paintImagePoints.map(p => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100]);
             data.paint.push({
-                tool: paintTool, color: paintColor, size: paintSize, points: pts
+                tool: paintTool, color: paintColor, size: paintSize, points: pts, opacity: paintOpacity
             });
             sbSavePaint();
 
@@ -1808,6 +1820,7 @@
         const lineStrokes = strokes.filter(s => s.tool !== 'fill');
 
         for (const s of lineStrokes) {
+            const opacity = s.opacity !== undefined ? s.opacity : 1;
             offscreenCtx.lineCap = 'round';
             offscreenCtx.lineJoin = 'round';
             offscreenCtx.lineWidth = s.size || 8;
@@ -1815,6 +1828,7 @@
                 offscreenCtx.globalCompositeOperation = 'destination-out';
                 offscreenCtx.strokeStyle = 'rgba(0,0,0,1)';
             } else {
+                offscreenCtx.globalAlpha = opacity;
                 offscreenCtx.strokeStyle = s.color;
             }
             offscreenCtx.beginPath();
@@ -1823,6 +1837,7 @@
                 offscreenCtx.lineTo(s.points[i][0], s.points[i][1]);
             }
             offscreenCtx.stroke();
+            offscreenCtx.globalAlpha = 1;
             offscreenCtx.globalCompositeOperation = 'source-over';
         }
 
@@ -1836,6 +1851,7 @@
                 try {
                     const path = new Path2D(region.path);
                     offscreenCtx.save();
+                    offscreenCtx.globalAlpha = s.opacity !== undefined ? s.opacity : 1;
                     offscreenCtx.translate(tx, ty);
                     offscreenCtx.fillStyle = s.color;
                     offscreenCtx.fill(path);
@@ -1856,6 +1872,10 @@
             document.getElementById('paint-size-val').textContent = paintSize;
         });
         document.getElementById('paint-color').addEventListener('input', (e) => { paintColor = e.target.value; });
+        document.getElementById('paint-opacity').addEventListener('input', (e) => {
+            paintOpacity = parseInt(e.target.value) / 100;
+            document.getElementById('paint-opacity-val').textContent = Math.round(paintOpacity * 100) + '%';
+        });
         document.getElementById('paint-undo').addEventListener('click', paintUndo);
         document.getElementById('paint-exit').addEventListener('click', exitPaintMode);
     }
