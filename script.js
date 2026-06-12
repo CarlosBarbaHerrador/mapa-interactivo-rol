@@ -1979,19 +1979,17 @@
                 p.setAttribute('stroke-width', '2');
             });
         });
-        // Highlight selected
-        const sel = document.querySelector(`path[data-region="${region.name}"]:not([data-lake-edge])`);
-        if (sel) {
-            sel.setAttribute('stroke', region.color || '#e94560');
-            sel.setAttribute('stroke-width', '4');
-            sel.setAttribute('fill', hexAlpha(region.color || '#e94560', 0.38));
-            sel.setAttribute('filter', 'url(#region-glow)');
-        }
-        const selLake = document.querySelector(`path[data-region="${region.name}"][data-lake-edge]`);
-        if (selLake) {
-            selLake.setAttribute('stroke', region.color || '#e94560');
-            selLake.setAttribute('stroke-width', '2');
-        }
+        // Highlight selected — all paths, not just the first
+        document.querySelectorAll(`path[data-region="${region.name}"]:not([data-lake-edge])`).forEach(p => {
+            p.setAttribute('stroke', region.color || '#e94560');
+            p.setAttribute('stroke-width', '4');
+            p.setAttribute('fill', hexAlpha(region.color || '#e94560', 0.38));
+            p.setAttribute('filter', 'url(#region-glow)');
+        });
+        document.querySelectorAll(`path[data-region="${region.name}"][data-lake-edge]`).forEach(p => {
+            p.setAttribute('stroke', region.color || '#e94560');
+            p.setAttribute('stroke-width', '2');
+        });
     }
 
     function saveRegionEdit() {
@@ -2028,18 +2026,16 @@
         document.getElementById('region-edit-save').dataset.regionName = region.name;
         activeRegion = region.name;
 
-        const sel = document.querySelector(`path[data-region="${region.name}"]:not([data-lake-edge])`);
-        if (sel) {
-            sel.setAttribute('stroke', color);
-            sel.setAttribute('stroke-width', '4');
-            sel.setAttribute('fill', hexAlpha(color, 0.38));
-            sel.setAttribute('filter', 'url(#region-glow)');
-        }
-        const selLake = document.querySelector(`path[data-region="${region.name}"][data-lake-edge]`);
-        if (selLake) {
-            selLake.setAttribute('stroke', color);
-            selLake.setAttribute('stroke-width', '2');
-        }
+        document.querySelectorAll(`path[data-region="${region.name}"]:not([data-lake-edge])`).forEach(p => {
+            p.setAttribute('stroke', color);
+            p.setAttribute('stroke-width', '4');
+            p.setAttribute('fill', hexAlpha(color, 0.38));
+            p.setAttribute('filter', 'url(#region-glow)');
+        });
+        document.querySelectorAll(`path[data-region="${region.name}"][data-lake-edge]`).forEach(p => {
+            p.setAttribute('stroke', color);
+            p.setAttribute('stroke-width', '2');
+        });
 
         // Update region editor dropdown if open
         const selDropdown = document.getElementById('rb-region-select');
