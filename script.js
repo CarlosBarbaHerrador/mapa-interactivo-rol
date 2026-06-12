@@ -1966,16 +1966,16 @@
 
         document.getElementById('region-panel').className = 'region-panel-open';
 
-        // Reset all regions first
+        // Reset all regions to default appearance
         data.regions.forEach(r => {
             document.querySelectorAll(`path[data-region="${r.name}"]:not([data-lake-edge])`).forEach(p => {
-                p.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-                p.setAttribute('stroke-width', '2');
-                p.setAttribute('fill', hexAlpha(r.color || '#e94560', 0.19));
+                p.setAttribute('fill', hexAlpha(r.color || '#e94560', 0.1));
+                p.setAttribute('stroke', BOUNDARY_STROKE);
+                p.setAttribute('stroke-width', BOUNDARY_WIDTH);
                 p.removeAttribute('filter');
             });
             document.querySelectorAll(`path[data-region="${r.name}"][data-lake-edge]`).forEach(p => {
-                p.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+                p.setAttribute('stroke', 'transparent');
                 p.setAttribute('stroke-width', '2');
             });
         });
