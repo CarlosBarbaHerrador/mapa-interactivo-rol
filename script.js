@@ -2188,6 +2188,18 @@
     function saveState() {
     }
 
+    function savePoiCoords(id, coords) {
+        const entry = markers[id];
+        if (!entry) return;
+        entry.poi.coords = coords;
+        sbUpsert('pois', {
+            id: id, name: entry.poi.name, category: entry.poi.type,
+            color: entry.poi.color, region: entry.poi.region,
+            coords: coords, description: entry.poi.description,
+            links: entry.poi.links || []
+        }, 'id');
+    }
+
     // ─── CATEGORÍAS ───
     (function populateTypeSelect() {
         const sel = document.getElementById('edit-type');
@@ -2255,6 +2267,10 @@
         if (editMode) {
             marker.on('click', () => openEditModal(id));
             marker.dragging?.enable();
+            marker.on('dragend', () => {
+                const pos = marker.getLatLng();
+                savePoiCoords(id, [pos.lat, pos.lng]);
+            });
         }
 
         markers[id] = { marker, poi: { ...poi, id } };
@@ -2280,8 +2296,7 @@
 
         marker.on('dragend', () => {
             const pos = marker.getLatLng();
-            if (markers[id]) markers[id].poi.coords = [pos.lat, pos.lng];
-            saveState();
+            savePoiCoords(id, [pos.lat, pos.lng]);
         });
         marker.on('click', () => openEditModal(id));
 
@@ -2527,8 +2542,7 @@
             e.marker.off('dragend');
             e.marker.on('dragend', () => {
                 const pos = e.marker.getLatLng();
-                e.poi.coords = [pos.lat, pos.lng];
-                saveState();
+                savePoiCoords(e.poi.id, [pos.lat, pos.lng]);
             });
         });
     }
