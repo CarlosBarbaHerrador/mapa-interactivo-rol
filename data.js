@@ -67,6 +67,16 @@ const MAP_DATA = {
             "label": "Castillos",
             "icon": "🏰",
             "color": "#8B4513"
+        },
+        "toll": {
+            "label": "Peajes",
+            "icon": "💰",
+            "color": "#e6b800"
+        },
+        "player": {
+            "label": "Jugadores",
+            "icon": "🙍‍♂️",
+            "color": "#00bcd4"
         }
     },
     "regions": [
