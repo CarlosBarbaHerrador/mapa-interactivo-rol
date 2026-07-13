@@ -2104,16 +2104,11 @@
     let editingId = null;
 
     // ─── PERSISTENCIA ───
-    const STORAGE_KEY = 'mapa_rol_data';
-    const TOKEN_KEY = 'mapa_rol_github_token';
-
     function getGitHubToken() {
-        return localStorage.getItem(TOKEN_KEY) || '';
+        return '';
     }
 
     function setGitHubToken(token) {
-        if (token) localStorage.setItem(TOKEN_KEY, token);
-        else localStorage.removeItem(TOKEN_KEY);
     }
 
     function generateDataJs() {
@@ -2191,25 +2186,6 @@
     }
 
     function saveState() {
-        try {
-            const pois = Object.values(markers).map(e => ({
-                id: e.poi.id, name: e.poi.name, type: e.poi.type,
-                color: e.poi.color, region: e.poi.region,
-                coords: e.poi.coords, description: e.poi.description,
-                links: e.poi.links
-            }));
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ pois, editPassword: data.editPassword }));
-        } catch (e) {}
-    }
-
-    function loadSavedData() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return;
-            const saved = JSON.parse(raw);
-            if (saved.pois) saved.pois.forEach(p => addMarkerFromData(p));
-            if (saved.editPassword) data.editPassword = saved.editPassword;
-        } catch (e) {}
     }
 
     // ─── CATEGORÍAS ───
@@ -2249,7 +2225,6 @@
     }
 
     // ─── CARGAR POIs ───
-    loadSavedData();
     if (Object.keys(markers).length === 0) {
         data.pois.forEach(poi => addMarkerFromData(poi));
     }
